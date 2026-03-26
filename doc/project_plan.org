@@ -1,0 +1,442 @@
+#+TITLE: StashSwap Project Plan
+#+AUTHOR: dprandle
+#+DATE: 2026-03-26
+#+DESCRIPTION: Yarn destashing marketplace — full project plan with phases and time estimates
+
+* Overview
+
+StashSwap is a marketplace for buying and selling partially used yarn skeins.
+Stack: Node/Express/TypeScript · HTMX (server-side rendering) · MongoDB · AWS S3 · Stripe
+
+** Current State (Done)
+- JWT auth with bcrypt password hashing and HTTP-only cookie sessions
+- User creation with full validation (username, email, password rules)
+- Profile editing with picture upload (currently local filesystem — needs S3 migration)
+- HTMX-driven UI with modal dialogs and conditional navbar
+
+** Total Estimated Timeline
+~18–26 weeks solo, assuming part-time work (~10–15 hrs/week).
+Full-time (~40 hrs/week) cuts this to ~6–9 weeks.
+
+-----
+
+* Phase 1 — Infrastructure & Foundation
+:PROPERTIES:
+:ESTIMATE: 1–2 weeks
+:END:
+
+Get the plumbing right before building features on top.
+These are blocking dependencies for nearly everything else.
+
+** Tasks
+*** TODO Migrate profile pictures from local filesystem to S3
+    - AWS config already exists in =src/config.ts= — just not wired into the upload handler
+    - Update =src/api/profile.ts= to stream to S3 instead of writing to =/public/profile_pics/=
+    - Update profile pic URL references to use S3 base URL
+
+*** TODO Set up email service
+    - Choose a provider: Resend, Postmark, or AWS SES
+    - Abstract behind a simple =sendEmail(to, subject, html)= util so provider can be swapped
+    - Needed for: order confirmations, account linking, seller email verification
+    - Add env vars and test with a basic "welcome" email
+
+*** TODO Stripe Connect setup
+    - Create Stripe account and enable Connect
+    - Choose Connect mode: *Express* is recommended (sellers manage their own Stripe accounts,
+      you collect a platform fee via =application_fee_amount=)
+    - Install Stripe SDK, add keys to =.env=
+    - Create webhook endpoint and register with Stripe dashboard
+
+*** TODO Add addresses to User model
+    - Embedded array in User doc: ={ street, city, state, zip, country, isDefault }=
+    - CRUD routes: add / edit / delete / set-default
+    - Wire up the stubbed Settings page to manage addresses
+
+*** TODO Wire up Settings page
+    - Currently stubbed with no routes registered in =server.ts=
+    - Register =create_settings_routes()= from =settings.ts=
+    - Add address management UI using HTMX
+
+** Notes
+- The most important decision in this phase is Stripe Connect mode — it determines the entire
+  payout architecture. Express Connect is the right call for a yarn marketplace.
+- Rate limit auth endpoints before going live (=express-rate-limit= is simple to add).
+
+-----
+
+* Phase 2 — Listings (Selling Side)
+:PROPERTIES:
+:ESTIMATE: 3–4 weeks
+:END:
+
+The core product of the platform. Nothing to buy until sellers can list.
+
+** MongoDB Model (=listings= collection)
+#+BEGIN_SRC javascript
+{
+  _id,
+  seller_id,
+  status,            // "draft" | "active" | "sold" | "cancelled"
+  title,
+  description,
+  price,             // stored in cents
+  condition,         // "new" | "like_new" | "good" | "fair"
+  quantity,          // defaults to 1
+  quantity_remaining,
+  photos: [{ s3_key, order }],
+  tags: {
+    fiber_types: [],   // "merino", "alpaca", "acrylic", ...
+    yarn_weights: [],  // "lace", "fingering", "DK", "worsted", "bulky", ...
+    colors: []         // free-form tags
+  },
+  brand,             // e.g. "Malabrigo", "WoolPeople"
+  weight_grams,      // grams remaining in the skein
+  yardage_remaining, // yards/meters remaining
+  ships_from_zip,    // for shipping quotes
+  created_at,
+  updated_at
+}
+#+END_SRC
+
+** Tasks
+*** TODO Design listing data model and create MongoDB indexes
+    - Index on: =seller_id=, =status=, =tags.yarn_weights=, =tags.fiber_types=, =price=
+
+*** TODO Listing creation form
+    - Multi-photo upload (min 1, suggested max 8) to S3
+    - S3 key structure: =listings/{listing_id}/{photo_order}.webp=
+    - Process images with Sharp (resize, convert to WebP) before upload
+    - Tag input UI for fiber type, yarn weight, color (hybrid: dropdown for weight, free-form for rest)
+    - Fields: title, description, price, condition, quantity, brand, weight_grams, yardage_remaining
+
+*** TODO Draft → Active publish flow
+    - Save as draft, review, then publish
+    - Email verification check before first listing (gate on =email_verified= flag in User)
+
+*** TODO Email verification for sellers
+    - Send verification link on first listing attempt if not verified
+    - Store =email_verified= and =email_verify_token= on User
+    - Verification endpoint that sets =email_verified = true=
+
+*** TODO Listing detail page
+    - Photo gallery, all listing fields, seller profile summary
+    - Add to Cart button (works for guests too)
+
+*** TODO Browse/search listings page (the storefront)
+    - Grid layout of listing cards
+    - Basic filters: yarn weight, fiber type, price range, condition
+    - Pagination or infinite scroll
+
+*** TODO Edit listing
+    - Allow edits while status is =draft= or =active=
+    - Prevent edits if order is pending
+
+*** TODO Cancel listing
+    - Only allowed if no pending/paid orders exist against it
+    - Sets status to =cancelled=, photos remain in S3
+
+*** TODO Seller dashboard
+    - Active listings with quick-edit links
+    - Sold listings
+    - Revenue stats: last 30 days, all-time
+    - Link to fulfillment queue (Phase 6)
+
+** Notes
+- Add =brand= and =yardage_remaining= — buyers care about these more than almost anything else for destash.
+- Use a closed set for yarn weight (there are ~8 standard weights in the craft world).
+- Decide on a maximum photo count early so you can size your S3 cost estimates.
+
+-----
+
+* Phase 3 — Cart & Guest Checkout
+:PROPERTIES:
+:ESTIMATE: 2–3 weeks
+:END:
+
+The hardest UX problem: guests must be able to shop without creating an account.
+
+** MongoDB Model (=carts= collection)
+#+BEGIN_SRC javascript
+{
+  _id,
+  session_id,       // for guests (stored in cookie)
+  user_id,          // for logged-in users (nullable)
+  items: [{
+    listing_id,
+    seller_id,
+    quantity,
+    price_snapshot, // price at time of add — lock it in
+    title_snapshot  // in case listing is edited or deleted
+  }],
+  guest_email,      // collected at checkout start
+  expires_at        // TTL index — auto-clean abandoned carts after 7 days
+}
+#+END_SRC
+
+** Tasks
+*** TODO Session cookie for guests
+    - On first "Add to Cart", generate a UUID session ID and store in a cookie
+    - Create or retrieve cart by session_id
+
+*** TODO Add to Cart endpoint
+    - Works for both guests and logged-in users
+    - Validates listing is =active= and has available quantity
+    - Snapshots price and title at add time
+
+*** TODO Cart page
+    - Review items, quantities, remove items
+    - Group items by seller visually (one checkout creates one order per seller)
+    - Show estimated totals
+
+*** TODO Cart merge on login
+    - When a guest logs in, merge their guest cart (by session_id) into their user cart
+    - De-duplicate items, prefer higher quantity
+
+*** TODO Handle multi-seller carts
+    - Cart can contain items from multiple sellers
+    - Checkout creates one Order per seller, one Stripe PaymentIntent per seller
+    - Show seller groupings clearly in cart and checkout UI
+
+** Notes
+- Don't check inventory at add-to-cart time — check and reserve at payment time.
+  Two people can have the same item in their cart; first to pay wins.
+- Cart TTL index (=expires_at=) keeps MongoDB clean automatically.
+
+-----
+
+* Phase 4 — Checkout & Orders
+:PROPERTIES:
+:ESTIMATE: 4–5 weeks
+:END:
+
+The core of the product. This is the hardest phase — Stripe webhooks, inventory conflicts,
+guest linking, and email all converge here.
+
+** MongoDB Model (=orders= collection)
+#+BEGIN_SRC javascript
+{
+  _id,
+  buyer_id,                  // nullable — null for guest orders
+  buyer_email,
+  guest_token,               // UUID — used to link guest order to a new account later
+  seller_id,
+  items: [{ listing_id, quantity, price_cents, title }],
+  shipping_address: { street, city, state, zip, country },
+  status,                    // "pending_payment" | "paid" | "shipped" | "delivered" | "cancelled" | "refunded"
+  stripe_payment_intent_id,
+  stripe_application_fee_cents,
+  platform_fee_cents,
+  shipping_cost_cents,
+  tax_cents,
+  total_cents,
+  tracking_number,
+  shipped_at,
+  created_at,
+  updated_at
+}
+#+END_SRC
+
+** Tasks
+*** TODO Checkout flow — step 1: shipping address
+    - Pre-fill from user's default address if logged in
+    - Guest enters email + address here (store =guest_email= on cart)
+
+*** TODO Shipping cost calculation
+    - Start with flat-rate tiers by weight (simplest, ship it fast)
+    - Upgrade to EasyPost or Shippo API later for live rates
+    - Seller's =ships_from_zip= + buyer's zip + item weight → rate
+
+*** TODO Tax calculation
+    - Use Stripe Tax (simplest — already in your Stripe account)
+    - Alternative: TaxJar if you need more control
+
+*** TODO Platform fee calculation
+    - Decide your cut — e.g. 8% of item subtotal
+    - Applied as =application_fee_amount= on the Stripe PaymentIntent (Stripe Connect)
+
+*** TODO Stripe PaymentIntent creation
+    - One PaymentIntent per seller-group in the cart
+    - Include =application_fee_amount= for your platform cut
+    - On the PaymentIntent =metadata=: store =order_id=, =buyer_email=
+
+*** TODO Inventory reservation at payment time
+    - Before confirming PaymentIntent, check =quantity_remaining= is sufficient
+    - If not, abort checkout and notify buyer which item sold out
+
+*** TODO Stripe webhook handler (=/webhooks/stripe=)
+    - =payment_intent.succeeded= → mark order =paid=, decrement listing =quantity_remaining=,
+      set listing to =sold= if =quantity_remaining= reaches 0, send emails
+    - =payment_intent.payment_failed= → release reservation, notify buyer
+    - =charge.dispute.created= → flag order, notify you (admin)
+    - Verify webhook signature with Stripe's SDK
+
+*** TODO Order confirmation email to buyer
+    - Summary of items, total, shipping address
+    - CTA: "Create an account to track your order" → links to registration pre-filled with their email
+    - Include =guest_token= in the link if guest order
+
+*** TODO Guest-to-account linking
+    - Registration page accepts =?email=X&token=Y= query params from confirmation email
+    - On account creation, find all orders where =guest_token= matches, set =buyer_id=
+    - Token is single-use — clear it after linking
+
+*** TODO Order detail page (buyer)
+    - Status, items, shipping address, tracking number (when available)
+    - Accessible to guest via =guest_token= in URL (no login required)
+
+*** TODO Orders list page (buyer)
+    - Currently stubbed — fill it in
+    - Logged-in users see all orders linked to their account
+
+** Notes
+- Stripe webhooks are the source of truth for payment confirmation — never trust the client redirect.
+- The guest linking flow via email token is the most nuanced UX in the whole project. Sketch it
+  on paper before coding it.
+- Stripe handles PCI compliance for card data — never store card numbers yourself.
+
+-----
+
+* Phase 5 — Account Management
+:PROPERTIES:
+:ESTIMATE: 1–2 weeks
+:END:
+
+Polish the buyer experience with a proper account hub.
+
+** Tasks
+*** TODO Account page — central hub
+    - Links to: Profile, Addresses, Payment Methods, Orders, Settings
+    - Summary cards showing recent order status
+
+*** TODO Address management
+    - Add, edit, delete addresses
+    - Set default (used to pre-fill checkout)
+    - Already planned in Phase 1 Settings page — promote to a proper Account section
+
+*** TODO Saved payment methods
+    - Store Stripe Customer ID on User doc
+    - Create Stripe Customer on first checkout if not exists
+    - List saved cards via Stripe API (show last 4 + expiry)
+    - Delete card via Stripe API
+    - Never store card data in your own database
+
+*** TODO Public seller profile page
+    - Profile picture, public name, about bio
+    - Active listings grid
+    - Review summary (Phase 7)
+
+-----
+
+* Phase 6 — Fulfillment & Seller Tools
+:PROPERTIES:
+:ESTIMATE: 2–3 weeks
+:END:
+
+Close the loop on the selling side — sellers need to be able to ship orders.
+
+** Tasks
+*** TODO Seller order notification email
+    - Sent when =payment_intent.succeeded= webhook fires
+    - Includes buyer's shipping address and items ordered
+    - Link to fulfillment queue
+
+*** TODO Seller order management page
+    - List of paid orders awaiting fulfillment
+    - Order detail: buyer address, items, amounts
+    - Sorted by oldest first (FIFO fulfillment)
+
+*** TODO Add tracking number
+    - Form field on order detail
+    - Submitting sets =tracking_number=, =shipped_at=, order status → =shipped=
+    - Triggers email to buyer with tracking number
+
+*** TODO Stripe payouts
+    - Stripe Connect handles payout schedule to seller's bank account automatically
+    - Sellers manage their payout settings in their Stripe Express dashboard
+    - Your platform fee is deducted automatically via =application_fee_amount=
+
+*** TODO Seller dashboard stats
+    - Units sold (30-day, all-time)
+    - Revenue (30-day, all-time) — net after platform fee
+    - Pending fulfillment count
+    - Active listing count
+
+-----
+
+* Phase 7 — Discovery & Marketplace Feel
+:PROPERTIES:
+:ESTIMATE: 3–4 weeks
+:END:
+
+Makes it feel like a real marketplace, not just a form.
+
+** Tasks
+*** TODO Search with filters
+    - Full-text search on title and description (MongoDB Atlas Search or basic regex to start)
+    - Filters: yarn weight, fiber type, color tag, price range, condition
+    - Sort: newest, price low→high, price high→low
+
+*** TODO Landing page with featured listings
+    - Currently just a placeholder
+    - Featured/recent active listings grid
+    - Category quick-links (by yarn weight or fiber type)
+
+*** TODO Reviews
+    - After order status → =delivered=, prompt buyer to review the seller
+    - Star rating + text review
+    - Display on seller's public profile page
+    - Aggregate seller rating shown on listing detail page
+
+*** TODO Messaging (buyer ↔ seller)
+    - Pre-purchase questions (currently stubbed in =messages.html=)
+    - Simple thread model in MongoDB
+    - HTMX polling or SSE for near-realtime updates
+    - Notification badge in navbar
+
+*** TODO Admin panel (basic)
+    - Even a minimal one — ability to view/manage listings, users, orders
+    - Flag and remove inappropriate listings
+    - View disputes
+
+-----
+
+* Things Not to Forget
+
+| Topic                 | Detail                                                                               |
+|-----------------------+--------------------------------------------------------------------------------------|
+| Refund/dispute policy | Define before launch — Stripe has dispute handling but you need a written policy     |
+| Listing photos        | Decide max count (suggest 8), plan S3 key structure now: =listings/{id}/{n}.webp=   |
+| Yarn brand field      | Buyers search by brand (Malabrigo, WoolPeople, etc.) — add to listing model         |
+| Skein weight (grams)  | Core destash info — "partial skein" means nothing without a gram weight              |
+| Yardage remaining     | Equally important — "200 of 400 yards remaining"                                     |
+| Ships from zip        | Needed for accurate shipping rate quotes per seller                                  |
+| Prohibited items      | Basic Terms of Service / listing policy before accepting payments                    |
+| Rate limiting         | Add to auth endpoints (=express-rate-limit=) before going live                      |
+| HTTPS / prod config   | Ensure cookies use =secure: true= in prod, rotate JWT secret from the dev default   |
+| Admin panel           | You will need this. Build something minimal in Phase 7 at the latest.               |
+
+-----
+
+* Suggested Build Order
+
+#+BEGIN_SRC
+Phase 1: Infrastructure (S3 + Email + Stripe + Addresses)   [1–2 wks]
+    ↓
+Phase 2: Listings (something to browse and buy)             [3–4 wks]
+    ↓
+Phase 3: Cart (needed before checkout)                      [2–3 wks]
+    ↓
+Phase 4: Checkout & Orders (this IS the product)            [4–5 wks]  ← hardest phase
+    ↓
+Phase 5: Account Management (polish buyer experience)       [1–2 wks]
+    ↓
+Phase 6: Fulfillment & Seller Tools (close the loop)        [2–3 wks]
+    ↓
+Phase 7: Discovery & Marketplace Feel (nice-to-haves)       [3–4 wks]
+
+Total: ~16–23 weeks part-time (~10–15 hrs/week)
+       ~6–9  weeks full-time  (~40 hrs/week)
+#+END_SRC
+
+Phase 4 is the hardest and most important. Everything before it is table-stakes.
+Everything after it is polish that turns a working app into a real product.
