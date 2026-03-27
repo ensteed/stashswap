@@ -2,9 +2,9 @@ import { type Request, type Response, type NextFunction, Router } from "express"
 import { MongoClient, Collection, type UpdateResult } from "mongodb";
 import multer from "multer";
 import sharp from "sharp";
-import fs from "fs";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-import {config} from "../config.js";
+import { config } from "../config.js";
 import { render_fragment } from "../template.js";
 import { verify_liuser, sign_out_user_send_resp, type liuser_payload } from "./auth.js";
 import type { ss_user } from "./users.js";
@@ -57,6 +57,8 @@ function send_update_profile_response(res: Response, err_msg: string | null) {
     res.type("html").send(html);
 }
 
+const s3 = new S3Client({ region: config.s3_region });
+
 export function create_profile_routes(mongo_client: MongoClient): Router {
     const db = mongo_client.db(process.env.DB_NAME);
     const coll_name = process.env.USER_COLLECTION_NAME!;
@@ -67,12 +69,13 @@ export function create_profile_routes(mongo_client: MongoClient): Router {
         // desctructuring - pull username from body and store it as unsername_or_email, and pwd as plain_text_pwd
         const usr = req.liuser as liuser_payload;
         const find_prom = users.findOne({ _id: usr.id });
-        find_prom.then(
-            (usr: ss_user | null) => {
+
+        const on_find_resolved = (usr: ss_user | null) => {
                 if (usr) {
                     // If everything succeeds, this is what we do
                     const html_txt = render_fragment("edit-profile.html", {
-                        pfp_s3_key: usr.profile && usr.profile.pfp_s3_key ? usr.profile.pfp_s3_key : "profile_pics/default.png",
+                        pfp_s3_key:
+                            usr.profile && usr.profile.pfp_s3_key ? usr.profile.pfp_s3_key : "profile_pics/default.png",
                         public_name: usr.profile && usr.profile.public_name ? usr.profile.public_name : usr.first_name,
                         profile_about: usr.profile && usr.profile.about,
                     });
@@ -82,15 +85,16 @@ export function create_profile_routes(mongo_client: MongoClient): Router {
                     // If the user is not found, they have been removed from the DB so remove their session
                     sign_out_user_send_resp(res);
                 }
-            },
-            (err: any) => {
-                send_err_resp(500, "Could not retrieve user profile: " + err.message, res);
-                return;
-            }
-        );
+        };
+
+        const on_find_rejected = (err: any) => {
+            send_err_resp(500, "Could not retrieve user profile: " + err.message, res);
+        };
+        
+        find_prom.then(on_find_resolved, on_find_rejected);
     };
 
-    // Upload profile pic
+    // return profile pic
     const upload_pfp = (req: Request, res: Response) => {
         const usr = req.liuser as liuser_payload;
         const default_pfp = "default.png";
@@ -108,24 +112,32 @@ export function create_profile_routes(mongo_client: MongoClient): Router {
             if (err) {
                 send_upload_pfp_response(res, default_pfp, err.message);
             } else {
-                const pfp_s3_key = `${usr.id.toString()}.webp`;
+                const pfp_s3_key = `${config.s3_base_url}/${usr.id.toString()}.webp`;
                 const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
                 const dbop_prom = users.updateOne({ _id: usr.id }, update_op);
 
                 const on_update_resolved = (result: UpdateResult<ss_user>) => {
                     if (result.acknowledged && result.matchedCount == 1) {
-                        const on_file_write_done = (err: NodeJS.ErrnoException | null) => {
-                            if (err) {
-                                wlog("File write error: ", err.message);
-                                send_upload_pfp_response(res, default_pfp, "Error:" + err.message);
-                            } else {
-                                ilog("Updated profile pic for user ", usr.id);
-                                send_upload_pfp_response(res, pfp_s3_key, null);
-                            }
+                        const s3_key = `${usr.id.toString()}.webp`;
+                        const cmd = new PutObjectCommand({
+                            Bucket: config.s3_profile_pics_bucket,
+                            Key: s3_key,
+                            Body: buffer,
+                            ContentType: "image/webp",
+                        });
+                        ilog("Uploading profile pic for user ", usr.id, " to S3 key ", s3_key);
+
+                        const on_s3_put_resolved = () => {
+                            ilog("Uploaded profile pic for user ", usr.id);
+                            send_upload_pfp_response(res, pfp_s3_key, null);
                         };
-                        ilog("Saving profile pic for user ", usr.id, " to ", `public/${pfp_s3_key}`);
-                        fs.writeFile(`public/${pfp_s3_key}`, buffer, on_file_write_done);
-                        
+
+                        const on_s3_put_rejected = (err: any) => {
+                            wlog("S3 upload error: ", err.message);
+                            send_upload_pfp_response(res, default_pfp, "Error uploading image: " + err.message);
+                        };
+
+                        s3.send(cmd).then(on_s3_put_resolved, on_s3_put_rejected);
                     } else if (result.acknowledged) {
                         wlog("Server error - could not match ", usr.id, " in users to update profile pic");
                         send_upload_pfp_response(res, default_pfp, "Server error - logged in user not matched");

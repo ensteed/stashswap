@@ -29,12 +29,14 @@ Get the plumbing right before building features on top.
 These are blocking dependencies for nearly everything else.
 
 ** Tasks
-*** TODO Migrate profile pictures from local filesystem to S3
+*** DONE Migrate profile pictures from local filesystem to S3
+CLOSED: [2026-03-26 Thu 10:17]
     - AWS config already exists in =src/config.ts= — just not wired into the upload handler
     - Update =src/api/profile.ts= to stream to S3 instead of writing to =/public/profile_pics/=
     - Update profile pic URL references to use S3 base URL
 
-*** TODO Set up email service
+*** DONE Set up email service
+CLOSED: [2026-03-26 Thu 12:44]
     - Choose a provider: Resend, Postmark, or AWS SES
     - Abstract behind a simple =sendEmail(to, subject, html)= util so provider can be swapped
     - Needed for: order confirmations, account linking, seller email verification

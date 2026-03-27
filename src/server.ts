@@ -12,6 +12,7 @@ import { create_auth_routes } from "./api/auth.js";
 import { create_profile_routes } from "./api/profile.js";
 import { get_local_ip } from "./util.js";
 import { create_user_routes } from "./api/users.js";
+import * as emapi from "./services/email.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,6 +89,18 @@ async function start_server() {
         const html = template.render_fragment("index.html", { main_content_html: "{{> settings.html}}" });
         res.type("html").send(template.render_loaded_fragment(html));
     });
+
+    app.get("/test-email", function (_req, res) {
+        const cb = (resp: emapi.email_response) => {
+        };
+        const em_body: emapi.email_body = {
+            to: "daniel@zetrick.com",
+            from: "daniel@noblesteed.dev",
+            subject: "Test email from Ensteed",
+            html: "<p>This is a test email sent from the Ensteed server.</p>"};
+        emapi.send_email(em_body, cb);
+    });
+
 
     app.use("/", create_profile_routes(mdb_client));
 

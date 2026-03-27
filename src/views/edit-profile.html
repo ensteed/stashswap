@@ -4,7 +4,7 @@
     hx-target="#edit_profile_pic" hx-swap="innerHTML" hx-trigger="change from:#profile_pic_input">
     <div class="field centered">
       <div id="edit_profile_pic" class="profile-pic">
-        <img src="{{pfp_url}}" onerror="this.src='profile_pics/default.png'">
+        <img src="{{pfp_s3_key}}" onerror="this.src='profile_pics/default.png'">
       </div>
       <div id="edit_profile_pic_errs" class="errors">{{errs}}</div>
       <label class="btn-base" for="profile_pic_input">Choose Image</label>
