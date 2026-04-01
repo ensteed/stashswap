@@ -1,0 +1,100 @@
+<section class="listing-form-page">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Seller Tools</p>
+      <h1>{{page_title}}</h1>
+      <p>{{intro_copy}}</p>
+    </div>
+    <div class="listing-form-status">
+      <span class="status-pill">{{listing_status}}</span>
+      <a class="btn-base" href="/sell">Back to dashboard</a>
+    </div>
+  </div>
+
+  {{flash_html}}
+  {{error_html}}
+
+  <form class="listing-form" method="post" action="{{form_action}}" enctype="multipart/form-data">
+    <div class="listing-form-grid">
+      <section class="settings-card">
+        <h3>Core details</h3>
+        <div class="field">
+          <label for="listing-title">Title</label>
+          <input id="listing-title" type="text" name="title" value="{{title}}" required>
+        </div>
+        <div class="field">
+          <label for="listing-description">Description</label>
+          <textarea id="listing-description" name="description" rows="8" required>{{description}}</textarea>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="listing-price">Price</label>
+            <input id="listing-price" type="number" min="0.01" step="0.01" name="price" value="{{price}}" required>
+          </div>
+          <div class="field">
+            <label for="listing-quantity">Quantity</label>
+            <input id="listing-quantity" type="number" min="1" step="1" name="quantity" value="{{quantity}}" required>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="listing-condition">Condition</label>
+            <select id="listing-condition" name="condition" required>
+              {{condition_options_html}}
+            </select>
+          </div>
+          <div class="field">
+            <label for="listing-brand">Brand</label>
+            <input id="listing-brand" type="text" name="brand" value="{{brand}}" required>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-card">
+        <h3>Yarn details</h3>
+        <div class="field-row">
+          <div class="field">
+            <label for="listing-weight-grams">Weight remaining (g)</label>
+            <input id="listing-weight-grams" type="number" min="1" step="1" name="weight_grams" value="{{weight_grams}}" required>
+          </div>
+          <div class="field">
+            <label for="listing-yardage-remaining">Yardage remaining</label>
+            <input id="listing-yardage-remaining" type="number" min="1" step="1" name="yardage_remaining" value="{{yardage_remaining}}" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="listing-yarn-weight">Yarn weight</label>
+          <select id="listing-yarn-weight" name="yarn_weight">
+            {{yarn_weight_options_html}}
+          </select>
+        </div>
+        <div class="field">
+          <label for="listing-fiber-types">Fiber types</label>
+          <input id="listing-fiber-types" type="text" name="fiber_types" value="{{fiber_types}}" placeholder="merino, nylon, alpaca">
+        </div>
+        <div class="field">
+          <label for="listing-colors">Colors</label>
+          <input id="listing-colors" type="text" name="colors" value="{{colors}}" placeholder="rust, cream, moss">
+        </div>
+        <div class="field">
+          <label for="listing-ships-from-zip">Ships from ZIP</label>
+          <input id="listing-ships-from-zip" type="text" name="ships_from_zip" value="{{ships_from_zip}}" required>
+        </div>
+      </section>
+    </div>
+
+    <section class="settings-card">
+      <h3>Photos</h3>
+      <div class="field">
+        <label for="listing-photos">Listing photos</label>
+        <input id="listing-photos" type="file" name="photos" accept="image/*" multiple>
+      </div>
+      {{existing_photos_html}}
+    </section>
+
+    <div class="actions left">
+      <button class="base" type="submit" name="submit_action" value="draft">Save draft</button>
+      <button class="base primary" type="submit" name="submit_action" value="publish">Save and publish</button>
+    </div>
+  </form>
+</section>

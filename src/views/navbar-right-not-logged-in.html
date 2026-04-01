@@ -1,10 +1,11 @@
 <div id="nav-right" hx-swap-oob="innerHTML">
+  <a class="btn-base" href="/browse">Browse</a>
   <button id="btn-nav-right-login" class="base login" hx-get="/login" hx-target="#modal-root" hx-swap="innerHTML">
     Sign In
   </button>
-  <button class="base auto-raise" aria-label="Cart">
+  <a class="base auto-raise" href="/browse" aria-label="Browse listings">
     <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
       <use href="/icons.svg#shopping-cart" xlink:href="/icons.svg#shopping-cart"></use>
     </svg>
-  </button>
+  </a>
 </div>

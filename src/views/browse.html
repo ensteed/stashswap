@@ -1,0 +1,61 @@
+<section class="market-shell">
+  <aside class="market-filters">
+    <div class="section-heading compact">
+      <div>
+        <p class="eyebrow">Browse</p>
+        <h2>Find your next skein</h2>
+      </div>
+    </div>
+    <form method="get" action="/browse" class="filter-form">
+      <div class="field">
+        <label for="browse-q">Search</label>
+        <input id="browse-q" type="text" name="q" value="{{q}}" placeholder="Brand, colorway, fiber…">
+      </div>
+      <div class="field">
+        <label for="browse-yarn-weight">Yarn weight</label>
+        <select id="browse-yarn-weight" name="yarn_weight">
+          {{yarn_weight_options_html}}
+        </select>
+      </div>
+      <div class="field">
+        <label for="browse-fiber-type">Fiber type</label>
+        <input id="browse-fiber-type" type="text" name="fiber_type" value="{{fiber_type}}" placeholder="merino">
+      </div>
+      <div class="field">
+        <label for="browse-condition">Condition</label>
+        <select id="browse-condition" name="condition">
+          <option value="">Any condition</option>
+          {{condition_options_html}}
+        </select>
+      </div>
+      <div class="field">
+        <label for="browse-min-price">Min price</label>
+        <input id="browse-min-price" type="number" min="0" step="0.01" name="min_price" value="{{min_price}}">
+      </div>
+      <div class="field">
+        <label for="browse-max-price">Max price</label>
+        <input id="browse-max-price" type="number" min="0" step="0.01" name="max_price" value="{{max_price}}">
+      </div>
+      <div class="actions left">
+        <button class="base primary" type="submit">Apply filters</button>
+        <a class="btn-base" href="/browse">Reset</a>
+      </div>
+    </form>
+  </aside>
+
+  <section class="market-results">
+    <div class="section-heading compact">
+      <div>
+        <p class="eyebrow">Storefront</p>
+        <h2>Available listings</h2>
+      </div>
+      <a href="/sell/listings/new">Sell your yarn</a>
+    </div>
+    <div class="listing-grid">
+      {{listing_cards_html}}
+    </div>
+    <div class="pagination">
+      {{pagination_html}}
+    </div>
+  </section>
+</section>

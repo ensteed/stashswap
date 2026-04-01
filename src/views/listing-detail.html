@@ -1,0 +1,60 @@
+<section class="listing-detail-page">
+  <div class="listing-detail-grid">
+    <div class="listing-gallery">
+      {{gallery_html}}
+    </div>
+    <div class="listing-detail-copy">
+      <p class="eyebrow">Marketplace Listing</p>
+      <h1>{{listing_title}}</h1>
+      <div class="listing-detail-price">{{listing_price}}</div>
+      <div class="listing-tag-row">
+        {{tags_html}}
+      </div>
+      <p>{{listing_description}}</p>
+
+      <dl class="listing-specs">
+        <div>
+          <dt>Brand</dt>
+          <dd>{{listing_brand}}</dd>
+        </div>
+        <div>
+          <dt>Condition</dt>
+          <dd>{{listing_condition}}</dd>
+        </div>
+        <div>
+          <dt>Weight left</dt>
+          <dd>{{listing_weight_grams}} g</dd>
+        </div>
+        <div>
+          <dt>Yardage left</dt>
+          <dd>{{listing_yardage_remaining}} yds</dd>
+        </div>
+        <div>
+          <dt>Quantity left</dt>
+          <dd>{{listing_quantity_remaining}}</dd>
+        </div>
+      </dl>
+
+      <div id="listing-detail-flash">
+        {{flash_html}}
+      </div>
+
+      <div class="actions left">
+        <button
+          class="base primary"
+          type="button"
+          hx-post="/api/listings/{{listing_id}}/cart-placeholder"
+          hx-target="#listing-detail-flash"
+          hx-swap="innerHTML">
+          Add to cart
+        </button>
+      </div>
+
+      <section class="seller-summary settings-card">
+        <p class="eyebrow">Seller</p>
+        <h3>{{seller_name}}</h3>
+        <p>{{seller_about}}</p>
+      </section>
+    </div>
+  </div>
+</section>

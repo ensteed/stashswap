@@ -4,7 +4,7 @@
     <button id="btn-create-account-modal-close" class="base auto-raise">X</button>
   </header>
   <div class="body">
-    <form hx-post="api/users/login" hx-target="#create-account-modal-errors" hx-swap="innerHTML" hx-indicator="#btn-create-account-modal-submit">
+    <form hx-post="/api/users/login" hx-target="#create-account-modal-errors" hx-swap="innerHTML" hx-indicator="#btn-create-account-modal-submit">
       <div id="create-account-modal-errors" class="errors"></div>
       <div class="field">
         <label for="create-account-modal-username">Username</label>

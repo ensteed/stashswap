@@ -4,7 +4,7 @@
     <button id="btn-login-modal-close" class="base auto-raise {{hidden_class}}">X</button>
   </header>
   <div class="body">
-    <form hx-post="api/login" hx-target="#login-errors" hx-swap="innerHTML" hx-indicator="#btn-login-submit">
+    <form hx-post="/api/login" hx-target="#login-errors" hx-swap="innerHTML" hx-indicator="#btn-login-submit">
       <div id="login-errors" class="errors"></div>
       <div class="field">
         <label for="login-modal-email">Email</label>

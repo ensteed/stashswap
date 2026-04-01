@@ -1,4 +1,5 @@
 <div id="nav-right" hx-swap-oob="innerHTML">
+  <a class="btn-base primary" href="/sell/listings/new">Sell</a>
   <div class="menu-button">
     <button id="account-menu-button" class="base account-menu">
       {{first_name}}
@@ -10,9 +11,9 @@
       {{> account-dropdown.html}}
     </div>
   </div>
-  <button class="base auto-raise">
+  <a class="base auto-raise" href="/browse" aria-label="Browse listings">
     <svg class="icon">
       <use href="/icons.svg?v={{icon_ver}}#shopping-cart"></use>
     </svg>
-  </button>
+  </a>
 </div>

@@ -1,0 +1,52 @@
+<section class="seller-dashboard">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Seller Dashboard</p>
+      <h1>{{seller_name}}</h1>
+      <p>Manage drafts, publish active listings, and prep your storefront inventory.</p>
+    </div>
+    <div class="seller-dashboard-actions">
+      {{email_status_badge}}
+      <span class="status-pill">{{payout_status}}</span>
+      <a class="btn-base primary" href="/sell/listings/new">Create listing</a>
+    </div>
+  </div>
+
+  {{flash_html}}
+
+  <section class="market-section">
+    <div class="section-heading compact">
+      <div>
+        <p class="eyebrow">Live</p>
+        <h2>Active listings</h2>
+      </div>
+    </div>
+    <div class="seller-listing-grid">
+      {{active_listings_html}}
+    </div>
+  </section>
+
+  <section class="market-section">
+    <div class="section-heading compact">
+      <div>
+        <p class="eyebrow">Queued</p>
+        <h2>Drafts</h2>
+      </div>
+    </div>
+    <div class="seller-listing-grid">
+      {{draft_listings_html}}
+    </div>
+  </section>
+
+  <section class="market-section">
+    <div class="section-heading compact">
+      <div>
+        <p class="eyebrow">History</p>
+        <h2>Sold listings</h2>
+      </div>
+    </div>
+    <div class="seller-listing-grid">
+      {{sold_listings_html}}
+    </div>
+  </section>
+</section>

@@ -47,6 +47,8 @@ export interface ss_user {
     first_name: string;
     last_name: string;
     email: string;
+    email_verified: boolean;
+    email_verify_token: string;
     pwd: string;
     profile: ss_user_profile;
     addresses: ss_user_address[];
@@ -59,6 +61,8 @@ const DEFAULT_USER: ss_user = {
     first_name: "",
     last_name: "",
     email: "",
+    email_verified: false,
+    email_verify_token: "",
     pwd: "",
     profile: DEFAULT_PROFILE,
     addresses: [],

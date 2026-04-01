@@ -12,6 +12,7 @@ import { create_auth_routes } from "./api/auth.js";
 import { create_profile_routes } from "./api/profile.js";
 import { create_settings_routes } from "./api/settings.js";
 import { create_stripe_routes } from "./api/stripe.js";
+import { create_listing_routes } from "./api/listings.js";
 import { get_local_ip } from "./util.js";
 import { create_user_routes } from "./api/users.js";
 import * as emapi from "./services/email.js";
@@ -65,12 +66,6 @@ async function start_server() {
     // Serve assets
     app.use(express.static(path.join(__dirname, "../public")));
 
-    // Send index.html
-    app.get("/", function (_req, res) {
-        const html = template.render_fragment("index.html", { main_content_html: "{{> landing.html}}" });
-        res.type("html").send(template.render_loaded_fragment(html));
-    });
-
     // Send create account
     app.get("/login", function (_req, res) {
         res.type("html").send(template.render_fragment("login.html"));
@@ -102,6 +97,7 @@ async function start_server() {
     });
 
 
+    app.use("/", create_listing_routes(mdb_client));
     app.use("/", create_profile_routes(mdb_client));
     app.use("/", create_settings_routes(mdb_client));
 
