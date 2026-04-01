@@ -1,0 +1,88 @@
+/* Fonts */
+@import url("https://fonts.googleapis.com/css2?family=Raleway:wght@500&family=Nunito:wght@400;700&display=swap");
+
+/* Color Palette */
+:root {
+    --color-primary: #e07a5f;
+    --color-primary-darker: #c05a3f;
+    --color-secondary: #81b29a;
+    --color-neutral: #fdfbf7;
+    --color-neutral-darker: #dddbd7;
+    --color-accent: #f2cc8f;
+    --color-text: #3d404b;
+    --color-borders: #3d404b33;
+    --color-box-shadow: rgba(0, 0, 0, 0.25);
+}
+
+body {
+    margin: 0;
+    font-family: "Nunito", sans-serif;
+    background-color: var(--color-neutral);
+    color: var(--color-text);
+}
+
+input,
+textarea,
+select {
+    font-family: "Nunito", sans-serif;
+    font-size: 0.9rem;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    border: 1px solid var(--color-borders);
+    border-radius: 4px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+input {
+    max-width: 25rem;
+}
+
+input.file {
+    display: none;
+}
+
+.main-content {
+    margin: auto;
+    padding: 1rem;
+    max-width: 83rem;
+}
+
+.centered {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.save-success-ind {
+    text-align: center;
+    color: rgb(0, 128, 0);
+    font-weight: 700;
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: "Raleway", sans-serif;
+    margin: 0.5em 0;
+}
+
+.hidden {
+    display: none;
+}
+
+.errors {
+    text-align: center;
+    color: red;
+}
+
+.icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    vertical-align: middle;
+}

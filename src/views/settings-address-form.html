@@ -1,0 +1,37 @@
+<form class="edit-settings address-form" hx-post="/api/settings/addresses" hx-target="#settings-address-book" hx-swap="outerHTML">
+  <h4>{{form_title}}</h4>
+  {{error_html}}
+  <input type="hidden" name="address_id" value="{{address_id}}">
+  <div class="field">
+    <label class="block" for="address_street">Street</label>
+    <input type="text" name="street" id="address_street" value="{{street}}" maxlength="120" required>
+  </div>
+  <div class="field">
+    <label class="block" for="address_street2">Apartment, suite, etc.</label>
+    <input type="text" name="street2" id="address_street2" value="{{street2}}" maxlength="120">
+  </div>
+  <div class="field">
+    <label class="block" for="address_city">City</label>
+    <input type="text" name="city" id="address_city" value="{{city}}" maxlength="80" required>
+  </div>
+  <div class="field">
+    <label class="block" for="address_state">State / province</label>
+    <input type="text" name="state" id="address_state" value="{{state}}" maxlength="80" required>
+  </div>
+  <div class="field">
+    <label class="block" for="address_zip">ZIP / postal code</label>
+    <input type="text" name="zip" id="address_zip" value="{{zip}}" maxlength="20" required>
+  </div>
+  <div class="field">
+    <label class="block" for="address_country">Country</label>
+    <input type="text" name="country" id="address_country" value="{{country}}" maxlength="80" required>
+  </div>
+  <label class="checkbox-field">
+    <input type="checkbox" name="is_default" value="on" {{checked}}>
+    <span>Use as my default shipping address</span>
+  </label>
+  <div class="actions left">
+    <button id="btn_edit_profile_save" class="base primary" type="submit">{{submit_label}}</button>
+    {{cancel_html}}
+  </div>
+</form>

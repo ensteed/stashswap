@@ -1,0 +1,57 @@
+.profile,
+.settings {
+    padding: 1rem;
+    margin: 1rem 0;
+    border: 1px solid var(--color-borders);
+    background-color: #fff;
+    border-radius: 8px;
+}
+
+form.edit-profile,
+form.edit-settings {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+}
+
+form .field {
+    padding: 0 0 1rem;
+}
+
+form .field label.block {
+    display: block;
+}
+
+form .field label {
+    font-size: 0.9em;
+    font-weight: 700;
+}
+
+form .field .hint {
+    margin: 0.25rem 0;
+    font-size: 0.7em;
+    font-style: italic;
+}
+
+form .actions {
+    display: flex;
+    justify-content: center;
+    padding: 1rem 0;
+    gap: 0.5rem;
+}
+
+.actions.left {
+    justify-content: flex-start;
+}
+
+.checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+}
+
+.checkbox-field input {
+    width: auto;
+    margin: 0;
+}

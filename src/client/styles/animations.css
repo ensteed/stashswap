@@ -1,0 +1,32 @@
+.spinner {
+    display: none;
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid transparent;
+    border-top-color: var(--color-secondary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.htmx-request #btn-login-submit-spinner {
+    display: inline-block;
+}
+
+.htmx-request #btn-login-submit-text {
+    display: none;
+}
+
+.temp-item {
+    opacity: 1;
+    transition: opacity 1s ease;
+}
+
+.temp-item.hide {
+    opacity: 0;
+}

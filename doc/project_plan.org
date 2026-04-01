@@ -46,15 +46,19 @@ CLOSED: [2026-03-26 Thu 12:44]
     - Create Stripe account and enable Connect
     - Choose Connect mode: *Express* is recommended (sellers manage their own Stripe accounts,
       you collect a platform fee via =application_fee_amount=)
-    - Install Stripe SDK, add keys to =.env=
-    - Create webhook endpoint and register with Stripe dashboard
+    - DONE Server-side plumbing: Stripe SDK installed, seller account link flow added,
+      webhook endpoint created at =/webhooks/stripe=, and required env vars documented
+    - Remaining manual setup: add =STRIPE_SECRET_KEY= / =STRIPE_WEBHOOK_SECRET= /
+      =APP_BASE_URL= to =.env=, enable Connect in Stripe, and register the webhook in the dashboard
 
-*** TODO Add addresses to User model
+*** DONE Add addresses to User model
+CLOSED: [2026-03-31 Tue 00:00]
     - Embedded array in User doc: ={ street, city, state, zip, country, isDefault }=
     - CRUD routes: add / edit / delete / set-default
     - Wire up the stubbed Settings page to manage addresses
 
-*** TODO Wire up Settings page
+*** DONE Wire up Settings page
+CLOSED: [2026-03-31 Tue 00:00]
     - Currently stubbed with no routes registered in =server.ts=
     - Register =create_settings_routes()= from =settings.ts=
     - Add address management UI using HTMX

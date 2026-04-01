@@ -1,14 +1,30 @@
-<div class="settings">
-  <h2>Edit Profile</h2>
-  <form class="edit-settings">
-    <div class="field">
-      <label class="block" for="profile_public_name">Public name</label>
-      <input type="text" name="username" id="settings_username" value="{{public_name}}" maxlength="80">
+<section class="settings-page">
+  <div class="settings-header">
+    <div>
+      <h2>Settings</h2>
+      <p>Manage shipping addresses and seller payouts.</p>
     </div>
-    <div class="actions">
-      <button id="btn_edit_profile_save" class="base primary" type="submit">Save</button>
-    </div>
-  </form>
-</div>
-</form>
-</div>
+  </div>
+
+  <div class="settings-grid">
+    <section class="settings-card">
+      <div class="settings-card-header">
+        <div>
+          <h3>Address book</h3>
+          <p>Save default shipping details for checkout.</p>
+        </div>
+      </div>
+      {{address_book_html}}
+    </section>
+
+    <section class="settings-card">
+      <div class="settings-card-header">
+        <div>
+          <h3>Stripe Connect</h3>
+          <p>Link a Stripe Express account to accept payouts as a seller.</p>
+        </div>
+      </div>
+      {{stripe_card_html}}
+    </section>
+  </div>
+</section>

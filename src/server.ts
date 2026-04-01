@@ -10,6 +10,8 @@ import { readFileSync } from "fs";
 import template from "./template.js";
 import { create_auth_routes } from "./api/auth.js";
 import { create_profile_routes } from "./api/profile.js";
+import { create_settings_routes } from "./api/settings.js";
+import { create_stripe_routes } from "./api/stripe.js";
 import { get_local_ip } from "./util.js";
 import { create_user_routes } from "./api/users.js";
 import * as emapi from "./services/email.js";
@@ -51,6 +53,9 @@ async function start_server() {
     // Handle cookies
     app.use(cookie_parser());
 
+    // Stripe webhook verification requires the raw body before JSON parsing runs.
+    app.use("/webhooks/stripe", express.raw({ type: "application/json" }), create_stripe_routes(mdb_client));
+
     // Parse json
     app.use(express.json());
 
@@ -85,11 +90,6 @@ async function start_server() {
         res.type("html").send(template.render_loaded_fragment(html));
     });
 
-    app.get("/settings", function (_req, res) {
-        const html = template.render_fragment("index.html", { main_content_html: "{{> settings.html}}" });
-        res.type("html").send(template.render_loaded_fragment(html));
-    });
-
     app.get("/test-email", function (_req, res) {
         const cb = (resp: emapi.email_response) => {
         };
@@ -103,6 +103,7 @@ async function start_server() {
 
 
     app.use("/", create_profile_routes(mdb_client));
+    app.use("/", create_settings_routes(mdb_client));
 
     // Auth routes
     app.use("/", create_auth_routes(mdb_client));
