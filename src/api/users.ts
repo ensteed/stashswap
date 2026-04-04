@@ -1,8 +1,8 @@
 import { type Request, type Response, Router } from "express";
 import { MongoClient, ObjectId, Collection, type InsertOneResult } from "mongodb";
 import bc from "bcrypt";
-import { send_err_resp } from "./error.js";
-import { sign_in_user_send_resp } from "./auth.js";
+import { create_err_resp, rethrow_http_error, make_http_error } from "./error.js";
+import { create_logged_in_resp } from "./auth.js";
 
 export interface ss_user_profile {
     pfp_s3_key: string;
@@ -88,86 +88,70 @@ function format_user_first_last_name(usr: ss_user) {
         const splt = trimmed_name.split(/\s+/);
         if (splt.length > 1) {
             usr.last_name = splt.pop() as string;
-            trimmed_name = splt.join(' ');
+            trimmed_name = splt.join(" ");
         }
         usr.first_name = trimmed_name;
     }
 }
 
-function hash_password_and_create_user(
-    new_user: ss_user,
-    users: Collection<ss_user>,
-    done_callback: create_user_callback
-) {
+async function do_hash(pwd: string): Promise<string> {
+    try {
+        const result = await bc.hash(pwd, 10);
+        return result;
+    } catch (err: any) {
+        throw make_http_error("Hashing failed: " + err.message, 500);
+    }
+}
+
+async function insert_user(new_user: ss_user, users: Collection<ss_user>): Promise<InsertOneResult<ss_user>> {
+    try {
+        const result = await users.insertOne(new_user);
+        return result;
+    } catch (err: any) {
+        throw make_http_error("DB operation failed: " + err.message, 500);
+    }
+}
+
+async function hash_password_and_create_user(new_user: ss_user, users: Collection<ss_user>): Promise<void> {
     // Set the new user's id
     new_user._id = new ObjectId().toString();
 
     // Split first and last name if we can
     format_user_first_last_name(new_user);
 
-    // Hash function callback
-    const on_hash_complete = (err: any, hash: string) => {
-        // If there was a hash error - that is a server problem
-        if (err) {
-            done_callback(null, { code: 200, message: err.toString() });
-            return;
-        }
+    new_user.pwd = await do_hash(new_user.pwd);
+    const usr_result = await insert_user(new_user, users);
 
-        // We successfully hashed the password - set it in the bsyr user and then insert the user in our collection
-        new_user.pwd = hash;
-
-        // Resolve and reject promise callbacks
-        const on_insert_resolved = (result: InsertOneResult<ss_user>) => {
-            if (result.insertedId == new_user._id) {
-                done_callback(new_user, null);
-            } else {
-                done_callback(null, { code: 200, message: "Unexpected id when creating user" });
-            }
-        };
-        const on_insert_reject = (reason: any) => {
-            done_callback(null, { code: 200, message: reason.toString() });
-        };
-
-        // Insert the user and pass the promise the resolve and reject callbacks
-        const insert_prom = users.insertOne(new_user);
-        insert_prom.then(on_insert_resolved, on_insert_reject);
-    };
-
-    // Hash the user providing callback from above
-    bc.hash(new_user.pwd, 10, on_hash_complete);
+    if (usr_result.insertedId != new_user._id) throw make_http_error("Unexpected id when creating user", 500);
 }
 
-function create_user(new_user: ss_user, users: Collection<ss_user>, done_callback: create_user_callback) {
+async function find_exiting_user(new_user: ss_user, users: Collection<ss_user>): Promise<ss_user | null> {
+    try {
+        const usr = await users.findOne({ $or: [{ username: new_user.username }, { email: new_user.email }] });
+        return usr;
+    } catch (err: any) {
+        throw make_http_error("DB query failed: " + err.message, 500);
+    }
+}
+
+async function create_user(new_user: ss_user, users: Collection<ss_user>): Promise<void> {
     ilog("Got user creation request for ", new_user);
     if (!/\S+@\S+\.\S+/.test(new_user.email)) {
-        done_callback(null, { code: 200, message: "Invalid email format" });
-        return;
+        throw new Error("Invalid email format");
     }
 
     if (!password_regex.test(new_user.pwd)) {
-        done_callback(null, { code: 200, message: `Password '${new_user.pwd}' does not meet guidelines` });
-        return;
+        throw new Error(`Password '${new_user.pwd}' does not meet guidelines`);
     }
 
     if (!username_regex.test(new_user.username)) {
-        done_callback(null, { code: 200, message: "Username does not meet guidelines" });
-        return;
+        throw new Error(`Username '${new_user.username}' does not meet guidelines`);
     }
 
-    // First, check if there is an existing user
-    const exists_user_check_complete = (found_usr: ss_user | null) => {
-        if (found_usr) {
-            done_callback(null, { code: 200, message: "User already exists" });
-        } else {
-            hash_password_and_create_user(new_user, users, done_callback);
-        }
-    };
-    const exists_user_check_rejected = (reason: any) => {
-        done_callback(null, { code: 200, message: "Server request failed: " + reason });
-    };
+    const usr = await find_exiting_user(new_user, users);
+    if (usr) throw new Error("User already exists");
 
-    const existing_usr_prom = users.findOne({ $or: [{ username: new_user.username }, { email: new_user.email }] });
-    existing_usr_prom.then(exists_user_check_complete, exists_user_check_rejected);
+    hash_password_and_create_user(new_user, users);
 }
 
 export function create_user_routes(mongo_client: MongoClient): Router {
@@ -175,37 +159,30 @@ export function create_user_routes(mongo_client: MongoClient): Router {
     const coll_name = process.env.USER_COLLECTION_NAME!;
     const users = db.collection<ss_user>(coll_name);
 
-    function create_user_req(req: Request, res: Response) {
+    async function create_user_req(req: Request, res: Response) {
         const new_user = { ...DEFAULT_USER, ...req.body };
         new_user.first_name = req.body.name;
         new_user.last_name = "";
-        const on_done_cb = (new_user: ss_user | null, error: error_info | null) => {
-            if (new_user) {
-                res.type("html").send("<h2>Success</h2>");
-            } else if (error) {
-                send_err_resp(error.code, error.message, res);
-            } else {
-                send_err_resp(500, "Unknown error", res);
-            }
-        };
-        create_user(new_user, users, on_done_cb);
+        try {
+            await create_user(new_user, users);
+        } catch (err: any) {
+            rethrow_http_error(err);
+            res.type("html").send(create_err_resp(err));
+        }
     }
 
     // Get a specific user by id
-    function create_user_and_login_req(req: Request, res: Response) {
+    async function create_user_and_login_req(req: Request, res: Response) {
         const new_user = { ...DEFAULT_USER, ...req.body };
         new_user.first_name = req.body.name;
         new_user.last_name = "";
-        const on_done_cb = (new_user: ss_user | null, error: error_info | null) => {
-            if (new_user) {
-                sign_in_user_send_resp(new_user, res);
-            } else if (error) {
-                send_err_resp(200, error.message, res);
-            } else {
-                send_err_resp(200, "Unknown error", res);
-            }
-        };
-        create_user(new_user, users, on_done_cb);
+        try {
+            await create_user(new_user, users);
+            res.type("html").send(create_logged_in_resp(new_user));
+        } catch (err: any) {
+            rethrow_http_error(err);
+            res.type("html").send(create_err_resp(err));
+        }
     }
 
     const user_router = Router();

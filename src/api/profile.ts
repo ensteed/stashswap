@@ -1,14 +1,14 @@
 import { type Request, type Response, type NextFunction, Router } from "express";
-import { MongoClient, Collection, type UpdateResult } from "mongodb";
+import { MongoClient, Collection, type UpdateResult, type UpdateFilter } from "mongodb";
 import multer from "multer";
 import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 import { config } from "../config.js";
 import { render_fragment } from "../template.js";
-import { verify_liuser, sign_out_user_send_resp, type liuser_payload } from "./auth.js";
+import { verify_liuser, clear_user_session, type liuser_payload } from "./auth.js";
 import type { ss_user } from "./users.js";
-import { send_err_resp } from "./error.js";
+import { make_http_error, is_http_error } from "./error.js";
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -17,6 +17,7 @@ const upload = multer({
 
 // This is the "middleware" muliter func - basically just processes multipart requests and puts the file result in the req.file
 const multer_profile_func = upload.single("profile_pic");
+const s3 = new S3Client({ region: config.s3_region });
 
 async function sanitize_profile_pic(file_buffer: Buffer) {
     const sharp_img = sharp(file_buffer)
@@ -24,7 +25,37 @@ async function sanitize_profile_pic(file_buffer: Buffer) {
         .resize(512, 512, { fit: "cover" })
         .toFormat("webp", { quality: 80 })
         .withMetadata({});
-    return sharp_img.toBuffer();
+    try {
+        const result = await sharp_img.toBuffer();
+        return result;
+    } catch (err: any) {
+        throw make_http_error("Error processing image: " + err.message, 500);
+    }
+}
+
+async function update_user(user_id: string, update_op: UpdateFilter<ss_user>, users: Collection<ss_user>) {
+    try {
+        return await users.updateOne({ _id: user_id }, update_op);
+    } catch (err: any) {
+        throw make_http_error(`Server error on updating ${user_id}: ${err.message}`, 500);
+    }
+}
+
+async function upload_profile_pic_to_s3(user_id: string, data: Buffer) {
+    const s3_key = `${user_id}.webp`;
+    const cmd = new PutObjectCommand({
+        Bucket: config.s3_profile_pics_bucket,
+        Key: s3_key,
+        Body: data,
+        ContentType: "image/webp",
+    });
+
+    try {
+        await s3.send(cmd);
+        ilog("Uploaded profile pic for user ", user_id, " to S3 key ", s3_key);
+    } catch (err: any) {
+        throw make_http_error("S3 upload failed: " + err.message, 500);
+    }
 }
 
 function verify_buffer_is_image(buf: Buffer): boolean {
@@ -35,16 +66,16 @@ function verify_buffer_is_image(buf: Buffer): boolean {
     return is_jpeg || is_png || is_riff;
 }
 
-function send_upload_pfp_err_response(res: Response, pfp_s3_key: string, err_msg: string | null) {
+function create_upload_pfp_html(pfp_s3_key: string, err_msg: string | null): string {
     const main_img = `<img src="${pfp_s3_key}">`;
     const errs = `<div id="edit_profile_pic_errs" hx-swap-oob="innerHTML">${err_msg ? err_msg : ""}</div>`;
     if (err_msg) {
         ilog("Sending upload pfp err response ", err_msg);
     }
-    res.type("html").send(main_img + "\n" + errs);
+    return main_img + "\n" + errs;
 }
 
-function send_update_profile_response(res: Response, err_msg: string | null) {
+function create_update_pfp_html(err_msg: string | null) {
     const html_class = err_msg ? "temp-item errors" : "temp-item save-success-ind";
     const txt = err_msg ? err_msg : "Saved!";
     const item_id = "edit_profile_temp_op_indicator";
@@ -52,10 +83,16 @@ function send_update_profile_response(res: Response, err_msg: string | null) {
     if (err_msg) {
         ilog("Sending upload pfp err response ", err_msg);
     }
-    res.type("html").send(html);
+    return html;
 }
 
-const s3 = new S3Client({ region: config.s3_region });
+async function get_logged_in_user(user_id: string, users: Collection<ss_user>) {
+    try {
+        return await users.findOne({ _id: user_id });
+    } catch (err: any) {
+        throw make_http_error("Problem with db query: " + err.message, 500);
+    }
+}
 
 export function create_profile_routes(mongo_client: MongoClient): Router {
     const db = mongo_client.db(process.env.DB_NAME);
@@ -65,16 +102,12 @@ export function create_profile_routes(mongo_client: MongoClient): Router {
     // Get edit profile page
     const edit_profile = async (req: Request, res: Response) => {
         const liusr = req.liuser as liuser_payload;
-        let usr: ss_user | null = null;
-        try {
-            // desctructuring - pull username from body and store it as unsername_or_email, and pwd as plain_text_pwd
-            usr = await users.findOne({ _id: liusr.id });
-        } catch (err: any) {
-            send_err_resp(500, "Could not retrieve user profile: " + err.message, res);
-        }
+        const usr = await get_logged_in_user(liusr.id, users);
 
         if (!usr) {
-            sign_out_user_send_resp(res);
+            wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
+            clear_user_session(res);
+            res.type("html").send(render_fragment("logout.html"));
             return;
         }
 
@@ -93,61 +126,46 @@ export function create_profile_routes(mongo_client: MongoClient): Router {
     const upload_pfp = async (req: Request, res: Response) => {
         const usr = req.liuser as liuser_payload;
         const default_pfp = "default.png";
-        if (!req.file || !req.file.buffer) {
-            send_upload_pfp_err_response(res, default_pfp, "No file uploaded");
-            return;
-        }
+        try {
+            if (!req.file || !req.file.buffer) {
+                throw new Error("No file uploaded");
+            }
 
-        if (!verify_buffer_is_image(req.file.buffer)) {
-            send_upload_pfp_err_response(res, default_pfp, "Uploaded file is not an image");
-            return;
-        }
+            if (!verify_buffer_is_image(req.file.buffer)) {
+                throw new Error("Uploaded file is not a valid image");
+            }
 
-        const data = await sanitize_profile_pic(req.file.buffer).catch((err) => {
-            send_upload_pfp_err_response(res, default_pfp, "Failed to sanitize image: " + err.message);
-            return;
-        });
-        
-        if (!data) {
-            send_upload_pfp_err_response(res, default_pfp, "No image data");
-            return;
-        }
+            const data = await sanitize_profile_pic(req.file.buffer);
 
-        const pfp_s3_key = `${config.s3_base_url}/${usr.id.toString()}.webp`;
-        const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
-        const result = await users.updateOne({ _id: usr.id }, update_op).catch((err) => {
-            send_upload_pfp_err_response(res, default_pfp, "Could not update profile pic: " + err.message);
-            return;
-        });
+            const pfp_s3_key = `${config.s3_base_url}/${usr.id}.webp`;
+            const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
+            const result = await update_user(usr.id, update_op, users);
 
-        if (!result) {
-            send_upload_pfp_err_response(res, default_pfp, "No result from updating profile pic");
-            return;
-        }
-
-        if (result.acknowledged && result.matchedCount == 1) {
-            const s3_key = `${usr.id.toString()}.webp`;
-            const cmd = new PutObjectCommand({
-                Bucket: config.s3_profile_pics_bucket,
-                Key: s3_key,
-                Body: data,
-                ContentType: "image/webp",
-            });
-            ilog("Uploading profile pic for user ", usr.id, " to S3 key ", s3_key);
-
-            await s3.send(cmd).catch((err) => {
-                send_upload_pfp_err_response(res, default_pfp, "Error uploading image: " + err.message);
-                return;
-            });
-
-            ilog("Uploaded profile pic for user ", usr.id);
-            send_upload_pfp_err_response(res, pfp_s3_key, null);
-        } else if (result.acknowledged) {
-            send_upload_pfp_err_response(res, default_pfp, "Server error - logged in user not matched");
+            // If acknowledged is false it means the update operation itself failed (e.g. db connection issue).
+            // If it's true but matchedCount is 0 it means no documents matched the filter - in this case likely
+            // the user was removed while logged in, so we log them out.
+            if (result.acknowledged && result.matchedCount == 1) {
+                await upload_profile_pic_to_s3(usr.id, data);
+                const html = create_upload_pfp_html(pfp_s3_key, null);
+                res.type("html").send(html);
+            } else if (result.acknowledged) {
+                wlog(`User ${usr.id} not found in db - likely removed while logged in`);
+                clear_user_session(res);
+                res.type("html").send(render_fragment("logout.html"));
+            } else {
+                throw make_http_error("Database update failed", 500);
+            }
+        } catch (err: any) {
+            if (!is_http_error(err)) {
+                const html = create_upload_pfp_html(default_pfp, err);
+                res.type("html").send(html);
+            } else {
+                throw err;
+            }
         }
     };
 
-    const update_profile = (req: Request, res: Response) => {
+    const update_profile = async (req: Request, res: Response) => {
         const usr = req.liuser as liuser_payload;
         const public_name = req.body.public_name;
         const about = req.body.about;
@@ -158,23 +176,19 @@ export function create_profile_routes(mongo_client: MongoClient): Router {
             },
         };
 
-        const on_update_resolved = (result: UpdateResult<ss_user>) => {
-            if (result.acknowledged && result.matchedCount == 1) {
-                ilog(`Updated user ${usr.id} profile.public_name to ${public_name} and about to ${about}`);
-                send_update_profile_response(res, null);
-            } else if (result.acknowledged) {
-                wlog("Server error - could not match", usr.id, " in users to update profile");
-                send_update_profile_response(res, "Server error - logged in user not matched");
-            }
-        };
+        const result = await update_user(usr.id, update_op, users);
 
-        const on_update_rejected = (err: any) => {
-            wlog("Update error:", err.message);
-            send_update_profile_response(res, "There was a problem with the update: " + err.message);
-        };
-
-        const update_prom = users.updateOne({ _id: usr.id }, update_op);
-        update_prom.then(on_update_resolved, on_update_rejected);
+        if (result.acknowledged && result.matchedCount == 1) {
+            ilog(`Updated user ${usr.id} profile.public_name to ${public_name} and about to ${about}`);
+            const html = create_update_pfp_html(null);
+            res.type("html").send(html);
+        } else if (result.acknowledged) {
+            wlog(`User ${usr.id} not found in db - likely removed while logged in`);
+            clear_user_session(res);
+            res.type("html").send(render_fragment("logout.html"));
+        } else {
+            throw make_http_error("Database update failed", 500);
+        }
     };
 
     const profile_router = Router();

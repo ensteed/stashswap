@@ -4,37 +4,22 @@ import bc from "bcrypt";
 import jwt from "jsonwebtoken";
 
 import template, { render_fragment, render_loaded_fragment } from "../template.js";
-import { send_err_resp } from "./error.js";
+import { rethrow_http_error, make_http_error, create_err_resp } from "./error.js";
 import type { ss_user } from "./users.js";
 
 const SECRET_JWT_KEY = process.env.SECRET_JWT_KEY!;
 asrt(SECRET_JWT_KEY);
 
+export type liuser_payload = jwt.JwtPayload & {
+    id: string;
+};
+
 declare global {
     namespace Express {
         interface Request {
-            liuser?: jwt.JwtPayload | string | undefined;
+            liuser?: liuser_payload;
         }
     }
-}
-
-type liuser_token_callback = (user: liuser_payload | null, err: string | null) => void;
-
-export interface liuser_payload {
-    id: string;
-}
-
-function get_liuser_from_token(token: string, callback: liuser_token_callback) {
-    // When verification completes we either return invalid creds
-    const on_verify_function = (err: jwt.VerifyErrors | null, decoded: jwt.JwtPayload | string | undefined) => {
-        if (err) {
-            callback(null, "Invalid credentials");
-        }
-        if (decoded) {
-            callback(decoded as liuser_payload, null);
-        }
-    };
-    jwt.verify(token, SECRET_JWT_KEY, on_verify_function);
 }
 
 export function send_unauthorized_response(res: Response) {
@@ -43,107 +28,130 @@ export function send_unauthorized_response(res: Response) {
     res.status(200).type("html").send(index_with_login);
 }
 
+export function create_logged_in_resp(usr: ss_user): string {
+    const remove_modal = `<div id="modal-root" hx-swap-oob="true"></div>`;
+    const main_page = `<div id="main-content" hx-swap-oob="true">{{> dashboard.html}}</div>`;
+    // This element is a out of band swap element so will correctly replace the navbar with the logged in one
+    const replaced_navbar = `{{> navbar-right-logged-in.html}}`;
+    const html = render_loaded_fragment(remove_modal + main_page + replaced_navbar, {
+        first_name: usr.first_name,
+    });
+    return html;
+}
+
+async function verify_token(token: string) {
+    return new Promise<liuser_payload>((resolve, reject) => {
+        jwt.verify(
+            token,
+            SECRET_JWT_KEY,
+            (err: jwt.VerifyErrors | null, decoded: jwt.JwtPayload | string | undefined) => {
+                if (err) {
+                    reject(err);
+                } else if (!decoded) {
+                    reject(new Error("Missing decoded token"));
+                } else {
+                    resolve(decoded as liuser_payload);
+                }
+            }
+        );
+    });
+}
+
 // This can be used as "middleware" for protected routes. Just understand that failure returns a 401 response which, when using htmx,
 // will return the errmsg fragment.
-export function verify_liuser(req: Request, res: Response, next: NextFunction) {
-    if (req.cookies.token) {
-        const token_done_func = (usr_token: liuser_payload | null, err: string | null) => {
-            if (usr_token) {
-                req.liuser = usr_token;
-                next();
-            } else {
-                ilog("Failed to verify user: ", err);
-                send_unauthorized_response(res);
-            }
-        };
-        get_liuser_from_token(req.cookies.token, token_done_func);
-    } else {
-        send_unauthorized_response(res);
+export async function maybe_liuser(req: Request, res: Response, next: NextFunction) {
+    if (!req.cookies.token) {
+        next();
+        return;
+    }
+    try {
+        req.liuser = await verify_token(req.cookies.token);
+    } catch (err: any) {
+        ilog("Optional auth failed: ", err);
+    }
+    next();
+}
+
+async function get_user_from_email(email: string, users: Collection<ss_user>): Promise<ss_user | null> {
+    try {
+        const usr = await users.findOne({ email: email });
+        return usr;
+    } catch (err: any) {
+        throw make_http_error("DB operation failed: " + err.message, 500);
     }
 }
 
-export function create_user_session(
-    user: ss_user,
-    res: Response,
-    signed_token_callback: (token: string | null, err: string | null) => void
-) {
-    const cb_func = (err: Error | null, token: string | undefined) => {
-        if (token && !err) {
-            res.cookie("token", token, {
-                httpOnly: true,
-                secure: false, // true if using https
-                sameSite: "strict",
-                maxAge: 60 * 60 * 1000, // 1 hour
-            });
-        }
-        signed_token_callback(token ? token : null, err ? err.message : null);
-    };
-    const liuser = { id: user._id };
-    jwt.sign(liuser, SECRET_JWT_KEY, { expiresIn: "1h" }, cb_func);
+async function get_user_from_id(id: string, users: Collection<ss_user>): Promise<ss_user | null> {
+    try {
+        const usr = await users.findOne({ _id: id });
+        return usr;
+    } catch (err: any) {
+        throw make_http_error("DB operation failed: " + err.message, 500);
+    }
 }
 
-export function sign_in_user_send_resp(usr: ss_user, res: Response) {
-    const on_token_signed = (token: string | null, err: string | null) => {
-        if (token && !err) {
-            ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
-            // On login, we want to show the user dashboard, and not a json message
-            setTimeout(() => {
-                const remove_modal = `<div id="modal-root" hx-swap-oob="true"></div>`;
-                const main_page = `<div id="main-content" hx-swap-oob="true">{{> dashboard.html}}</div>`;
-                // This element is a out of band swap element so will correctly replace the navbar with the logged in one
-                const replaced_navbar = `{{> navbar-right-logged-in.html}}`;
-                const html = render_loaded_fragment(remove_modal + main_page + replaced_navbar, { first_name: usr.first_name });
-                res.type("html").send(html);
-            }, 1000);
-        } else {
-            wlog(`Error loging token for user ${usr.username} (${usr.email}): ${err}`);
-            send_err_resp(200, "Failed to sign token", res);
-        }
-    };
-    create_user_session(usr, res, on_token_signed);
+// This function signs a token with the user id as the payload, and a secret key, and an expiration time of 1 hour, and returns the token as a promise
+async function sign_token(user_id: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+        jwt.sign({ id: user_id }, SECRET_JWT_KEY, { expiresIn: "1h" }, (err, token) => {
+            if (err) {
+                reject(err);
+            } else if (!token) {
+                reject(new Error("Failed to sign token: No token returned"));
+            } else {
+                resolve(token);
+            }
+        });
+    });
 }
 
-export function sign_out_user_send_resp(res: Response) {
+// Wrap bc compare to make an http error on failure
+async function compare_password(pt_pwd: string, hashed_pwd: string): Promise<boolean> {
+    try {
+        const match = await bc.compare(pt_pwd, hashed_pwd);
+        return match;
+    } catch (err: any) {
+        throw make_http_error("Password comparison failed: " + err.message, 500);
+    }
+}
+
+//
+async function create_user_session(res: Response, user_id: string) {
+    try {
+        const token = await sign_token(user_id);
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: false, // true if using https
+            sameSite: "strict",
+            maxAge: 60 * 60 * 1000, // 1 hour
+        });
+    } catch (err: any) {
+        throw make_http_error("Failed to create user session: " + err.message, 500);
+    }
+}
+
+// This can be used as "middleware" for protected routes. Just understand that failure returns a 401 response which, when using htmx,
+// will return the errmsg fragment.
+export async function verify_liuser(req: Request, res: Response, next: NextFunction) {
+    if (!req.cookies.token) {
+        send_unauthorized_response(res);
+        return;
+    }
+    try {
+        req.liuser = await verify_token(req.cookies.token);
+        next();
+    } catch (err: any) {
+        ilog("Failed to verify user: ", err);
+        next(err);
+    }
+}
+
+export function clear_user_session(res: Response) {
     res.clearCookie("token", {
         httpOnly: true,
         secure: false,
         sameSite: "strict",
     });
-    res.type("html").send(render_fragment("logout.html"));
-}
-
-// Search for the user by the passed in email (checks both username and email fields),
-// if there is a match, check the matches password against the hashed password passed in
-function authenticate_user_or_fail(email: string, plaint_text_pwd: string, users: Collection<ss_user>, res: Response) {
-    // Find user call completes (found or not found user)
-    const on_find_user_resolved = (result: ss_user | null) => {
-        // If we find the user then check the password - we pass the plain text password to bcrpy which internall hashes it and does some kind
-        // of compare algorithm against the hashed one stored in the db
-        if (result) {
-            const on_hash_comp_resolved = (match: boolean) => {
-                if (match) {
-                    sign_in_user_send_resp(result, res);
-                } else {
-                    send_err_resp(200, "Incorrect password", res);
-                }
-            };
-            const on_hash_comp_rejected = (reason: any) => {
-                send_err_resp(200, reason, res);
-            };
-            const hash_comp_prom = bc.compare(plaint_text_pwd, result.pwd);
-            hash_comp_prom.then(on_hash_comp_resolved, on_hash_comp_rejected);
-        } else {
-            send_err_resp(200, "User not found", res);
-        }
-    };
-
-    // If find one fails it means an internal server (connection most likely) error
-    const on_find_user_rejected = (reason: any) => {
-        send_err_resp(200, reason, res);
-    };
-    // This is an easy way to allow the user to either supply their username or email as input
-    const fprom = users.findOne({ email: email });
-    fprom.then(on_find_user_resolved, on_find_user_rejected);
 }
 
 export function create_auth_routes(mongo_client: MongoClient): Router {
@@ -152,72 +160,72 @@ export function create_auth_routes(mongo_client: MongoClient): Router {
     const users = db.collection<ss_user>(coll_name);
 
     // LOGIN
-    const login = (req: Request, res: Response) => {
-        // desctructuring - pull username from body and store it as unsername_or_email, and pwd as plain_text_pwd
-        const { email: email, pwd: plain_text_pwd } = req.body;
-        if (!email || !plain_text_pwd) {
-            send_err_resp(200, "Username and password are required", res);
-            return;
+    const login = async (req: Request, res: Response) => {
+        try {
+            // desctructuring - pull username from body and store it as unsername_or_email, and pwd as plain_text_pwd
+            const { email: email, pwd: plain_text_pwd } = req.body;
+            if (!email || !plain_text_pwd) {
+                throw new Error("Username and password are required");
+            }
+
+            const usr = await get_user_from_email(email, users);
+            if (!usr) {
+                throw new Error("User not found");
+            }
+
+            const match = await compare_password(plain_text_pwd, usr.pwd);
+            if (!match) {
+                throw new Error("Incorrect password");
+            }
+
+            await create_user_session(res, usr._id);
+            ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
+
+            // On login, we want to show the user dashboard, and not a json message
+            setTimeout(() => {
+                res.type("html").send(create_logged_in_resp(usr));
+            }, 1000);
+        } catch (err: any) {
+            rethrow_http_error(err);
+            res.type("html").send(create_err_resp(err));
         }
-        authenticate_user_or_fail(email, plain_text_pwd, users, res);
     };
 
     // LOGOUT
     const logout = (_req: Request, res: Response) => {
-        sign_out_user_send_resp(res);
+        clear_user_session(res);
+        res.type("html").send(render_fragment("logout.html"));
     };
 
-    const me = (req: Request, res: Response) => {
-        // Anything that goes wrong will send this
-        const send_not_logged_in_resp = (err: any) => {
-            res.type("html").send(
-                render_fragment("navbar-right-not-logged-in.html", { icon_ver: req.app.locals.ICON_VER })
-            );
-            ilog("User not logged in: ", err);
-        };
+    const me = async (req: Request, res: Response) => {
+        if (!req.liuser) {
+            ilog("me: user not logged in");
+            res.type("html").send(render_fragment("navbar-right-not-logged-in.html"));
+            return;
+        }
 
-        // When everything goes right and we finally log in - this is what we send
-        const send_logged_in_resp = (usr: ss_user) => {
+        try {
+            const usr = await get_user_from_id(req.liuser.id, users);
+            if (!usr) {
+                throw new Error(`User with id ${req.liuser.id} not found in database`);
+            }
+
+            ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
             res.type("html").send(
                 render_fragment("navbar-right-logged-in.html", {
-                    first_name: usr.first_name,
+                    first_name: req.liuser.first_name,
                     icon_ver: req.app.locals.ICON_VER,
                 })
             );
-            ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
-        };
-
-        if (req.cookies.token) {
-            const token_done_func = (usr_token: liuser_payload | null, err: string | null) => {
-                if (usr_token) {
-                    const find_prom = users.findOne({ _id: usr_token.id });
-
-                    // If the request had no errors
-                    const on_find_user_resolved = (result: ss_user | null) => {
-                        result
-                            ? send_logged_in_resp(result)
-                            : send_not_logged_in_resp(`${JSON.stringify(usr_token)} not found in users`);
-                    };
-
-                    // If there were errors in the request
-                    const on_find_user_rejected = (err: any) => {
-                        send_not_logged_in_resp(err);
-                    };
-                    find_prom.then(on_find_user_resolved, on_find_user_rejected);
-                } else {
-                    send_not_logged_in_resp(err);
-                }
-            };
-            get_liuser_from_token(req.cookies.token, token_done_func);
-        } else {
-            res.type("html").send(render_fragment("navbar-right-not-logged-in.html"));
+        } catch (err: any) {
+            rethrow_http_error(err);
+            res.type("html").send(create_err_resp(err));
         }
     };
 
     const auth_router = Router();
     auth_router.post("/api/login", login);
     auth_router.post("/api/logout", logout);
-    auth_router.get("/api/me", me);
-
+    auth_router.get("/api/me", maybe_liuser, me);
     return auth_router;
 }

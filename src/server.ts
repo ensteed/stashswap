@@ -10,11 +10,10 @@ import { readFileSync } from "fs";
 import template from "./template.js";
 import { create_auth_routes } from "./api/auth.js";
 import { create_profile_routes } from "./api/profile.js";
-import { create_settings_routes } from "./api/settings.js";
-import { create_stripe_routes } from "./api/stripe.js";
 import { get_local_ip } from "./util.js";
 import { create_user_routes } from "./api/users.js";
 import * as emapi from "./services/email.js";
+import * as err from "./api/error.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,6 +38,15 @@ function deb_req_func(req: express.Request, _res: express.Response, next: expres
     next();
 }
 
+function top_level_http_error_handler(err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) {
+    if (err.is_http_error(err)) {
+        res.status(err.status).type('html').send(err.create_err_resp(err));
+    }
+    else {
+        elog("Unexpected error in request handler:", err);
+    }
+}
+
 async function start_server() {
     await mdb_client.connect();
     ilog("Connected to db");
@@ -52,9 +60,6 @@ async function start_server() {
 
     // Handle cookies
     app.use(cookie_parser());
-
-    // Stripe webhook verification requires the raw body before JSON parsing runs.
-    app.use("/webhooks/stripe", express.raw({ type: "application/json" }), create_stripe_routes(mdb_client));
 
     // Parse json
     app.use(express.json());
@@ -103,13 +108,15 @@ async function start_server() {
 
 
     app.use("/", create_profile_routes(mdb_client));
-    app.use("/", create_settings_routes(mdb_client));
 
     // Auth routes
     app.use("/", create_auth_routes(mdb_client));
 
     // User routes
     app.use("/", create_user_routes(mdb_client));
+
+    // Error handling middleware should be last
+    app.use(top_level_http_error_handler);
 
     // Handle 404s
     app.listen(port, (err?: Error) => {
