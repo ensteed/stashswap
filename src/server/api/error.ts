@@ -1,5 +1,4 @@
 import template from "../template.js";
-import type { Response } from "express";
 
 interface err_response {
     message: string;

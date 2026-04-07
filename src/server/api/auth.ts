@@ -1,4 +1,4 @@
-import { type Request, type Response, type NextFunction, Router } from "express";
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { MongoClient, Collection } from "mongodb";
 import bc from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -7,6 +7,15 @@ import template, { render_fragment, render_loaded_fragment } from "../template.j
 import { rethrow_http_error, make_http_error, create_err_resp } from "./error.js";
 import type { ss_user } from "./users.js";
 
+declare module "fastify" {
+    interface FastifyRequest {
+        liuser?: liuser_payload;
+    }
+    interface FastifyInstance {
+        ICON_VER: string;
+    }
+}
+
 const SECRET_JWT_KEY = process.env.SECRET_JWT_KEY!;
 asrt(SECRET_JWT_KEY);
 
@@ -14,24 +23,15 @@ export type liuser_payload = jwt.JwtPayload & {
     id: string;
 };
 
-declare global {
-    namespace Express {
-        interface Request {
-            liuser?: liuser_payload;
-        }
-    }
-}
-
-export function send_unauthorized_response(res: Response) {
+export function send_unauthorized_response(reply: FastifyReply) {
     const login_html = template.render_fragment("login.html", { hidden_class: "hidden" });
     const index_with_login = template.render_fragment("index.html", { sign_in_fragment: login_html });
-    res.status(200).type("html").send(index_with_login);
+    reply.status(200).type("html").send(index_with_login);
 }
 
 export function create_logged_in_resp(usr: ss_user): string {
     const remove_modal = `<div id="modal-root" hx-swap-oob="true"></div>`;
     const main_page = `<div id="main-content" hx-swap-oob="true">{{> dashboard.html}}</div>`;
-    // This element is a out of band swap element so will correctly replace the navbar with the logged in one
     const replaced_navbar = `{{> navbar-right-logged-in.html}}`;
     const html = render_loaded_fragment(remove_modal + main_page + replaced_navbar, {
         first_name: usr.first_name,
@@ -57,19 +57,15 @@ async function verify_token(token: string) {
     });
 }
 
-// This can be used as "middleware" for protected routes. Just understand that failure returns a 401 response which, when using htmx,
-// will return the errmsg fragment.
-export async function maybe_liuser(req: Request, res: Response, next: NextFunction) {
-    if (!req.cookies.token) {
-        next();
+export async function maybe_liuser(request: FastifyRequest, _reply: FastifyReply) {
+    if (!request.cookies["token"]) {
         return;
     }
     try {
-        req.liuser = await verify_token(req.cookies.token);
+        request.liuser = await verify_token(request.cookies["token"]);
     } catch (err: any) {
         ilog("Optional auth failed: ", err);
     }
-    next();
 }
 
 async function get_user_from_email(email: string, users: Collection<ss_user>): Promise<ss_user | null> {
@@ -90,7 +86,6 @@ async function get_user_from_id(id: string, users: Collection<ss_user>): Promise
     }
 }
 
-// This function signs a token with the user id as the payload, and a secret key, and an expiration time of 1 hour, and returns the token as a promise
 async function sign_token(user_id: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
         jwt.sign({ id: user_id }, SECRET_JWT_KEY, { expiresIn: "1h" }, (err, token) => {
@@ -105,7 +100,6 @@ async function sign_token(user_id: string): Promise<string> {
     });
 }
 
-// Wrap bc compare to make an http error on failure
 async function compare_password(pt_pwd: string, hashed_pwd: string): Promise<boolean> {
     try {
         const match = await bc.compare(pt_pwd, hashed_pwd);
@@ -115,117 +109,117 @@ async function compare_password(pt_pwd: string, hashed_pwd: string): Promise<boo
     }
 }
 
-//
-async function create_user_session(res: Response, user_id: string) {
+async function create_user_session(reply: FastifyReply, user_id: string) {
     try {
         const token = await sign_token(user_id);
-        res.cookie("token", token, {
+        reply.setCookie("token", token, {
             httpOnly: true,
-            secure: false, // true if using https
+            secure: false,
             sameSite: "strict",
-            maxAge: 60 * 60 * 1000, // 1 hour
+            maxAge: 60 * 60, // 1 hour in seconds
         });
     } catch (err: any) {
         throw make_http_error("Failed to create user session: " + err.message, 500);
     }
 }
 
-// This can be used as "middleware" for protected routes. Just understand that failure returns a 401 response which, when using htmx,
-// will return the errmsg fragment.
-export async function verify_liuser(req: Request, res: Response, next: NextFunction) {
-    if (!req.cookies.token) {
-        send_unauthorized_response(res);
+export async function verify_liuser(request: FastifyRequest, reply: FastifyReply) {
+    if (!request.cookies["token"]) {
+        send_unauthorized_response(reply);
         return;
     }
     try {
-        req.liuser = await verify_token(req.cookies.token);
-        next();
+        request.liuser = await verify_token(request.cookies["token"]);
     } catch (err: any) {
         ilog("Failed to verify user: ", err);
-        next(err);
+        throw err;
     }
 }
 
-export function clear_user_session(res: Response) {
-    res.clearCookie("token", {
+export function clear_user_session(reply: FastifyReply) {
+    reply.clearCookie("token", {
         httpOnly: true,
         secure: false,
         sameSite: "strict",
     });
 }
 
-export function create_auth_routes(mongo_client: MongoClient): Router {
-    const db = mongo_client.db(process.env.DB_NAME);
-    const coll_name = process.env.USER_COLLECTION_NAME!;
-    const users = db.collection<ss_user>(coll_name);
+async function create_fake_login_timeout(usr: ss_user): Promise<string> { 
+    return new Promise<string>((resolve) => {
+        setTimeout(() => {
+            resolve(create_logged_in_resp(usr));
+        }, 1000);        
+    });
+}
 
-    // LOGIN
-    const login = async (req: Request, res: Response) => {
-        try {
-            // desctructuring - pull username from body and store it as unsername_or_email, and pwd as plain_text_pwd
-            const { email: email, pwd: plain_text_pwd } = req.body;
-            if (!email || !plain_text_pwd) {
-                throw new Error("Username and password are required");
+
+export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsync {
+    return async (fastify: FastifyInstance) => {
+        const db = mongo_client.db(process.env.DB_NAME);
+        const coll_name = process.env.USER_COLLECTION_NAME!;
+        const users = db.collection<ss_user>(coll_name);
+
+        const login = async (request: FastifyRequest, reply: FastifyReply) => {
+            try {
+                const body = request.body as { email: string; pwd: string };
+                const { email, pwd: plain_text_pwd } = body;
+                if (!email || !plain_text_pwd) {
+                    throw new Error("Username and password are required");
+                }
+
+                const usr = await get_user_from_email(email, users);
+                if (!usr) {
+                    throw new Error("User not found");
+                }
+
+                const match = await compare_password(plain_text_pwd, usr.pwd);
+                if (!match) {
+                    throw new Error("Incorrect password");
+                }
+
+                await create_user_session(reply, usr._id);
+                ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
+                const login_reply = await create_fake_login_timeout(usr);
+                reply.type("html").send(login_reply);
+            } catch (err: any) {
+                rethrow_http_error(err);
+                reply.type("html").send(create_err_resp(err));
+            }
+        };
+
+        const logout = (_request: FastifyRequest, reply: FastifyReply) => {
+            clear_user_session(reply);
+            reply.type("html").send(render_fragment("logout.html"));
+        };
+
+        const me = async (request: FastifyRequest, reply: FastifyReply) => {
+            if (!request.liuser) {
+                ilog("me: user not logged in");
+                reply.type("html").send(render_fragment("navbar-right-not-logged-in.html"));
+                return;
             }
 
-            const usr = await get_user_from_email(email, users);
-            if (!usr) {
-                throw new Error("User not found");
+            try {
+                const usr = await get_user_from_id(request.liuser.id, users);
+                if (!usr) {
+                    throw new Error(`User with id ${request.liuser.id} not found in database`);
+                }
+
+                ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
+                reply.type("html").send(
+                    render_fragment("navbar-right-logged-in.html", {
+                        first_name: usr.first_name ?? "",
+                        icon_ver: fastify.ICON_VER,
+                    })
+                );
+            } catch (err: any) {
+                rethrow_http_error(err);
+                reply.type("html").send(create_err_resp(err));
             }
+        };
 
-            const match = await compare_password(plain_text_pwd, usr.pwd);
-            if (!match) {
-                throw new Error("Incorrect password");
-            }
-
-            await create_user_session(res, usr._id);
-            ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
-
-            // On login, we want to show the user dashboard, and not a json message
-            setTimeout(() => {
-                res.type("html").send(create_logged_in_resp(usr));
-            }, 1000);
-        } catch (err: any) {
-            rethrow_http_error(err);
-            res.type("html").send(create_err_resp(err));
-        }
+        fastify.post("/api/login", login);
+        fastify.post("/api/logout", logout);
+        fastify.get("/api/me", { preHandler: maybe_liuser }, me);
     };
-
-    // LOGOUT
-    const logout = (_req: Request, res: Response) => {
-        clear_user_session(res);
-        res.type("html").send(render_fragment("logout.html"));
-    };
-
-    const me = async (req: Request, res: Response) => {
-        if (!req.liuser) {
-            ilog("me: user not logged in");
-            res.type("html").send(render_fragment("navbar-right-not-logged-in.html"));
-            return;
-        }
-
-        try {
-            const usr = await get_user_from_id(req.liuser.id, users);
-            if (!usr) {
-                throw new Error(`User with id ${req.liuser.id} not found in database`);
-            }
-
-            ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
-            res.type("html").send(
-                render_fragment("navbar-right-logged-in.html", {
-                    first_name: req.liuser.first_name,
-                    icon_ver: req.app.locals.ICON_VER,
-                })
-            );
-        } catch (err: any) {
-            rethrow_http_error(err);
-            res.type("html").send(create_err_resp(err));
-        }
-    };
-
-    const auth_router = Router();
-    auth_router.post("/api/login", login);
-    auth_router.post("/api/logout", logout);
-    auth_router.get("/api/me", maybe_liuser, me);
-    return auth_router;
 }

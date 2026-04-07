@@ -1,4 +1,4 @@
-import { type Request, type Response, Router } from "express";
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { MongoClient, ObjectId, Collection, type InsertOneResult } from "mongodb";
 import bc from "bcrypt";
 import { create_err_resp, rethrow_http_error, make_http_error } from "./error.js";
@@ -81,9 +81,8 @@ interface error_info {
 
 type create_user_callback = (new_user: ss_user | null, error: error_info | null) => void;
 
-// This will split first and last name where last name will contain the last word after the last space, and first name will contain everything else
 function format_user_first_last_name(usr: ss_user) {
-    let trimmed_name = usr.first_name.trim(); // Trim any leading or trailing spaces.
+    let trimmed_name = usr.first_name.trim();
     if (trimmed_name) {
         const splt = trimmed_name.split(/\s+/);
         if (splt.length > 1) {
@@ -113,15 +112,10 @@ async function insert_user(new_user: ss_user, users: Collection<ss_user>): Promi
 }
 
 async function hash_password_and_create_user(new_user: ss_user, users: Collection<ss_user>): Promise<void> {
-    // Set the new user's id
     new_user._id = new ObjectId().toString();
-
-    // Split first and last name if we can
     format_user_first_last_name(new_user);
-
     new_user.pwd = await do_hash(new_user.pwd);
     const usr_result = await insert_user(new_user, users);
-
     if (usr_result.insertedId != new_user._id) throw make_http_error("Unexpected id when creating user", 500);
 }
 
@@ -154,40 +148,40 @@ async function create_user(new_user: ss_user, users: Collection<ss_user>): Promi
     hash_password_and_create_user(new_user, users);
 }
 
-export function create_user_routes(mongo_client: MongoClient): Router {
-    const db = mongo_client.db(process.env.DB_NAME);
-    const coll_name = process.env.USER_COLLECTION_NAME!;
-    const users = db.collection<ss_user>(coll_name);
+export function create_user_routes(mongo_client: MongoClient): FastifyPluginAsync {
+    return async (fastify: FastifyInstance) => {
+        const db = mongo_client.db(process.env.DB_NAME);
+        const coll_name = process.env.USER_COLLECTION_NAME!;
+        const users = db.collection<ss_user>(coll_name);
 
-    async function create_user_req(req: Request, res: Response) {
-        const new_user = { ...DEFAULT_USER, ...req.body };
-        new_user.first_name = req.body.name;
-        new_user.last_name = "";
-        try {
-            await create_user(new_user, users);
-        } catch (err: any) {
-            rethrow_http_error(err);
-            res.type("html").send(create_err_resp(err));
+        async function create_user_req(request: FastifyRequest, reply: FastifyReply) {
+            const body = request.body as Record<string, string>;
+            const new_user = { ...DEFAULT_USER, ...body };
+            new_user.first_name = body["name"] ?? "";
+            new_user.last_name = "";
+            try {
+                await create_user(new_user, users);
+            } catch (err: any) {
+                rethrow_http_error(err);
+                reply.type("html").send(create_err_resp(err));
+            }
         }
-    }
 
-    // Get a specific user by id
-    async function create_user_and_login_req(req: Request, res: Response) {
-        const new_user = { ...DEFAULT_USER, ...req.body };
-        new_user.first_name = req.body.name;
-        new_user.last_name = "";
-        try {
-            await create_user(new_user, users);
-            res.type("html").send(create_logged_in_resp(new_user));
-        } catch (err: any) {
-            rethrow_http_error(err);
-            res.type("html").send(create_err_resp(err));
+        async function create_user_and_login_req(request: FastifyRequest, reply: FastifyReply) {
+            const body = request.body as Record<string, string>;
+            const new_user = { ...DEFAULT_USER, ...body };
+            new_user.first_name = body["name"] ?? "";
+            new_user.last_name = "";
+            try {
+                await create_user(new_user, users);
+                reply.type("html").send(create_logged_in_resp(new_user));
+            } catch (err: any) {
+                rethrow_http_error(err);
+                reply.type("html").send(create_err_resp(err));
+            }
         }
-    }
 
-    const user_router = Router();
-    user_router.post("/api/users", create_user_req);
-    user_router.post("/api/users/login", create_user_and_login_req);
-
-    return user_router;
+        fastify.post("/api/users", create_user_req);
+        fastify.post("/api/users/login", create_user_and_login_req);
+    };
 }

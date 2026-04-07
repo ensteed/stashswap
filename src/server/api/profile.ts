@@ -1,6 +1,6 @@
-import { type Request, type Response, type NextFunction, Router } from "express";
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
+import fastifyMultipart from "@fastify/multipart";
 import { MongoClient, Collection, type UpdateResult, type UpdateFilter } from "mongodb";
-import multer from "multer";
 import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
@@ -10,13 +10,6 @@ import { verify_liuser, clear_user_session, type liuser_payload } from "./auth.j
 import type { ss_user } from "./users.js";
 import { make_http_error, is_http_error } from "./error.js";
 
-const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 4 * 1024 * 1024 }, // 4MB
-});
-
-// This is the "middleware" muliter func - basically just processes multipart requests and puts the file result in the req.file
-const multer_profile_func = upload.single("profile_pic");
 const s3 = new S3Client({ region: config.s3_region });
 
 async function sanitize_profile_pic(file_buffer: Buffer) {
@@ -33,7 +26,7 @@ async function sanitize_profile_pic(file_buffer: Buffer) {
     }
 }
 
-async function update_user(user_id: string, update_op: UpdateFilter<ss_user>, users: Collection<ss_user>) {
+async function update_user(user_id: string, update_op: UpdateFilter<ss_user>, users: Collection<ss_user>): Promise<UpdateResult> {
     try {
         return await users.updateOne({ _id: user_id }, update_op);
     } catch (err: any) {
@@ -59,7 +52,6 @@ async function upload_profile_pic_to_s3(user_id: string, data: Buffer) {
 }
 
 function verify_buffer_is_image(buf: Buffer): boolean {
-    // minimal magic-byte checks (JPEG/PNG/WebP). Add stricter checks as needed.
     const is_jpeg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
     const is_png = buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     const is_riff = buf.slice(0, 4).toString() === "RIFF" && buf.slice(8, 12).toString() === "WEBP";
@@ -94,106 +86,105 @@ async function get_logged_in_user(user_id: string, users: Collection<ss_user>) {
     }
 }
 
-export function create_profile_routes(mongo_client: MongoClient): Router {
-    const db = mongo_client.db(process.env.DB_NAME);
-    const coll_name = process.env.USER_COLLECTION_NAME!;
-    const users = db.collection<ss_user>(coll_name);
+export function create_profile_routes(mongo_client: MongoClient): FastifyPluginAsync {
+    return async (fastify: FastifyInstance) => {
+        await fastify.register(fastifyMultipart, { limits: { fileSize: 4 * 1024 * 1024 } });
 
-    // Get edit profile page
-    const edit_profile = async (req: Request, res: Response) => {
-        const liusr = req.liuser as liuser_payload;
-        const usr = await get_logged_in_user(liusr.id, users);
+        const db = mongo_client.db(process.env.DB_NAME);
+        const coll_name = process.env.USER_COLLECTION_NAME!;
+        const users = db.collection<ss_user>(coll_name);
 
-        if (!usr) {
-            wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
-            clear_user_session(res);
-            res.type("html").send(render_fragment("logout.html"));
-            return;
-        }
+        const edit_profile = async (request: FastifyRequest, reply: FastifyReply) => {
+            const liusr = request.liuser as liuser_payload;
+            const usr = await get_logged_in_user(liusr.id, users);
 
-        // If everything succeeds, this is what we do
-        const html_txt = render_fragment("edit-profile.html", {
-            pfp_s3_key: usr.profile?.pfp_s3_key ?? "profile_pics/default.png",
-            public_name: usr.profile?.public_name ?? usr.first_name,
-            profile_about: usr.profile?.about,
-        });
-
-        const index_html = render_fragment("index.html", { main_content_html: html_txt });
-        res.type("html").send(index_html);
-    };
-
-    // return profile pic
-    const upload_pfp = async (req: Request, res: Response) => {
-        const usr = req.liuser as liuser_payload;
-        const default_pfp = "default.png";
-        try {
-            if (!req.file || !req.file.buffer) {
-                throw new Error("No file uploaded");
+            if (!usr) {
+                wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
+                clear_user_session(reply);
+                reply.type("html").send(render_fragment("logout.html"));
+                return;
             }
 
-            if (!verify_buffer_is_image(req.file.buffer)) {
-                throw new Error("Uploaded file is not a valid image");
+            const html_txt = render_fragment("edit-profile.html", {
+                pfp_s3_key: usr.profile?.pfp_s3_key ?? "profile_pics/default.png",
+                public_name: usr.profile?.public_name ?? usr.first_name,
+                profile_about: usr.profile?.about,
+            });
+
+            const index_html = render_fragment("index.html", { main_content_html: html_txt });
+            reply.type("html").send(index_html);
+        };
+
+        const upload_pfp = async (request: FastifyRequest, reply: FastifyReply) => {
+            const usr = request.liuser as liuser_payload;
+            const default_pfp = "default.png";
+            try {
+                const part = await request.file();
+                if (!part) {
+                    throw new Error("No file uploaded");
+                }
+
+                const buffer = await part.toBuffer();
+
+                if (!verify_buffer_is_image(buffer)) {
+                    throw new Error("Uploaded file is not a valid image");
+                }
+
+                const data = await sanitize_profile_pic(buffer);
+
+                const pfp_s3_key = `${config.s3_base_url}/${usr.id}.webp`;
+                const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
+                const result = await update_user(usr.id, update_op, users);
+
+                if (result.acknowledged && result.matchedCount == 1) {
+                    await upload_profile_pic_to_s3(usr.id, data);
+                    const html = create_upload_pfp_html(pfp_s3_key, null);
+                    reply.type("html").send(html);
+                } else if (result.acknowledged) {
+                    wlog(`User ${usr.id} not found in db - likely removed while logged in`);
+                    clear_user_session(reply);
+                    reply.type("html").send(render_fragment("logout.html"));
+                } else {
+                    throw make_http_error("Database update failed", 500);
+                }
+            } catch (err: any) {
+                if (!is_http_error(err)) {
+                    const html = create_upload_pfp_html(default_pfp, err);
+                    reply.type("html").send(html);
+                } else {
+                    throw err;
+                }
             }
+        };
 
-            const data = await sanitize_profile_pic(req.file.buffer);
+        const update_profile = async (request: FastifyRequest, reply: FastifyReply) => {
+            const usr = request.liuser as liuser_payload;
+            const body = request.body as { public_name: string; about: string };
+            const { public_name, about } = body;
+            const update_op = {
+                $set: {
+                    "profile.public_name": public_name,
+                    "profile.about": about,
+                },
+            };
 
-            const pfp_s3_key = `${config.s3_base_url}/${usr.id}.webp`;
-            const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
             const result = await update_user(usr.id, update_op, users);
 
-            // If acknowledged is false it means the update operation itself failed (e.g. db connection issue).
-            // If it's true but matchedCount is 0 it means no documents matched the filter - in this case likely
-            // the user was removed while logged in, so we log them out.
             if (result.acknowledged && result.matchedCount == 1) {
-                await upload_profile_pic_to_s3(usr.id, data);
-                const html = create_upload_pfp_html(pfp_s3_key, null);
-                res.type("html").send(html);
+                ilog(`Updated user ${usr.id} profile.public_name to ${public_name} and about to ${about}`);
+                const html = create_update_pfp_html(null);
+                reply.type("html").send(html);
             } else if (result.acknowledged) {
                 wlog(`User ${usr.id} not found in db - likely removed while logged in`);
-                clear_user_session(res);
-                res.type("html").send(render_fragment("logout.html"));
+                clear_user_session(reply);
+                reply.type("html").send(render_fragment("logout.html"));
             } else {
                 throw make_http_error("Database update failed", 500);
             }
-        } catch (err: any) {
-            if (!is_http_error(err)) {
-                const html = create_upload_pfp_html(default_pfp, err);
-                res.type("html").send(html);
-            } else {
-                throw err;
-            }
-        }
-    };
-
-    const update_profile = async (req: Request, res: Response) => {
-        const usr = req.liuser as liuser_payload;
-        const public_name = req.body.public_name;
-        const about = req.body.about;
-        const update_op = {
-            $set: {
-                "profile.public_name": public_name,
-                "profile.about": about,
-            },
         };
 
-        const result = await update_user(usr.id, update_op, users);
-
-        if (result.acknowledged && result.matchedCount == 1) {
-            ilog(`Updated user ${usr.id} profile.public_name to ${public_name} and about to ${about}`);
-            const html = create_update_pfp_html(null);
-            res.type("html").send(html);
-        } else if (result.acknowledged) {
-            wlog(`User ${usr.id} not found in db - likely removed while logged in`);
-            clear_user_session(res);
-            res.type("html").send(render_fragment("logout.html"));
-        } else {
-            throw make_http_error("Database update failed", 500);
-        }
+        fastify.get("/profile", { preHandler: verify_liuser }, edit_profile);
+        fastify.post("/profile", { preHandler: verify_liuser }, update_profile);
+        fastify.post("/profile/pic", { preHandler: verify_liuser }, upload_pfp);
     };
-
-    const profile_router = Router();
-    profile_router.get("/profile", verify_liuser, edit_profile);
-    profile_router.post("/profile", verify_liuser, update_profile);
-    profile_router.post("/profile/pic", verify_liuser, multer_profile_func, upload_pfp);
-    return profile_router;
 }
