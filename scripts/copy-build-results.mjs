@@ -1,7 +1,7 @@
 import fs from "fs";
 
 console.log("Copying views");
-fs.cpSync("src/views", "dist/views", {"recursive": true});
+fs.cpSync("src/server/views", "dist/views", {"recursive": true});
 
 console.log("Copying client src");
 fs.cpSync("src/client", "public", {"recursive": true});
