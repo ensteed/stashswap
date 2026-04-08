@@ -1,0 +1,10 @@
+import "./styles/animations.css";
+import "./styles/base.css";
+import "./styles/buttons.css";
+import "./styles/forms.css";
+import "./styles/modals.css";
+import "./styles/navbar.css";
+import "./styles/profile.css";
+import "./styles/settings.css";
+import "./assets/icons.svg";
+import "./app";

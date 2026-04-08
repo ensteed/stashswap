@@ -2,11 +2,10 @@
     "name": "stashswap",
     "version": "1.0.0",
     "description": "",
-    "main": "index.js",
     "scripts": {
-        "clean": "node scripts/clean-build-results.mjs",
-        "copy": "node scripts/copy-build-results.mjs",
-        "build": "npm run clean && node scripts/build-assets.mjs && tsc && npm run copy",
+        "build": "npm run build-server && npm run build-client",
+        "build-server": "tsc",
+        "build-client": "vite build",
         "start": "nodemon dist/server.js",
         "dev": "ts-node src/server/server.ts"
     },
@@ -24,7 +23,8 @@
         "nodemon": "^3.1.10",
         "prettier": "^3.6.2",
         "ts-node": "^10.9.2",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.2",
+        "vite": "^8.0.7"
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.919.0",
@@ -36,6 +36,7 @@
         "bcrypt": "^6.0.0",
         "dotenv": "^17.2.1",
         "fastify": "^5.0.0",
+        "glob": "^13.0.6",
         "jsonwebtoken": "^9.0.2",
         "mongodb": "^6.18.0",
         "resend": "^6.9.4",
