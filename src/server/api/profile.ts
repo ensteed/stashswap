@@ -9,6 +9,7 @@ import { render_fragment } from "../template.js";
 import { verify_liuser, clear_user_session, type liuser_payload } from "./auth.js";
 import type { ss_user } from "./users.js";
 import { make_http_error, is_http_error } from "./error.js";
+import {amanifest} from "../assets.js";
 
 const s3 = new S3Client({ region: config.s3_region });
 
@@ -101,7 +102,7 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
             if (!usr) {
                 wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
                 clear_user_session(reply);
-                reply.type("html").send(render_fragment("logout.html"));
+                reply.type("html").send(render_fragment("logout.html", {icons_path: amanifest.icons}));
                 return;
             }
 
@@ -143,7 +144,7 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
                 } else if (result.acknowledged) {
                     wlog(`User ${usr.id} not found in db - likely removed while logged in`);
                     clear_user_session(reply);
-                    reply.type("html").send(render_fragment("logout.html"));
+                    reply.type("html").send(render_fragment("logout.html", {icons_path: amanifest.icons}));
                 } else {
                     throw make_http_error("Database update failed", 500);
                 }
@@ -177,7 +178,7 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
             } else if (result.acknowledged) {
                 wlog(`User ${usr.id} not found in db - likely removed while logged in`);
                 clear_user_session(reply);
-                reply.type("html").send(render_fragment("logout.html"));
+                reply.type("html").send(render_fragment("logout.html", {icons_path: amanifest.icons}));
             } else {
                 throw make_http_error("Database update failed", 500);
             }

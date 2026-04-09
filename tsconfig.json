@@ -41,5 +41,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
   },
-  "include": ["src/server/**/*.ts"]    
+  "include": ["src/server/**/*.ts", "../../.emacs.d/backup/!home!dprandle!projects!stashswap!src!server!assets.ts~"]    
 }

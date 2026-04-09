@@ -6,13 +6,11 @@ import jwt from "jsonwebtoken";
 import template, { render_fragment, render_loaded_fragment } from "../template.js";
 import { rethrow_http_error, make_http_error, create_err_resp } from "./error.js";
 import type { ss_user } from "./users.js";
+import { amanifest } from "../assets.js";
 
 declare module "fastify" {
     interface FastifyRequest {
         liuser?: liuser_payload;
-    }
-    interface FastifyInstance {
-        ICON_VER: string;
     }
 }
 
@@ -35,6 +33,7 @@ export function create_logged_in_resp(usr: ss_user): string {
     const replaced_navbar = `{{> navbar-right-logged-in.html}}`;
     const html = render_loaded_fragment(remove_modal + main_page + replaced_navbar, {
         first_name: usr.first_name,
+        icons_path: amanifest.icons,
     });
     return html;
 }
@@ -113,6 +112,7 @@ async function create_user_session(reply: FastifyReply, user_id: string) {
     try {
         const token = await sign_token(user_id);
         reply.setCookie("token", token, {
+            path: "/",
             httpOnly: true,
             secure: false,
             sameSite: "strict",
@@ -138,20 +138,20 @@ export async function verify_liuser(request: FastifyRequest, reply: FastifyReply
 
 export function clear_user_session(reply: FastifyReply) {
     reply.clearCookie("token", {
+        path: "/",
         httpOnly: true,
         secure: false,
         sameSite: "strict",
     });
 }
 
-async function create_fake_login_timeout(usr: ss_user): Promise<string> { 
+async function create_fake_login_timeout(usr: ss_user): Promise<string> {
     return new Promise<string>((resolve) => {
         setTimeout(() => {
             resolve(create_logged_in_resp(usr));
-        }, 1000);        
+        }, 1000);
     });
 }
-
 
 export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
@@ -189,13 +189,15 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
 
         const logout = (_request: FastifyRequest, reply: FastifyReply) => {
             clear_user_session(reply);
-            reply.type("html").send(render_fragment("logout.html"));
+            reply.type("html").send(render_fragment("logout.html", { icons_path: amanifest.icons }));
         };
 
         const me = async (request: FastifyRequest, reply: FastifyReply) => {
             if (!request.liuser) {
                 ilog("me: user not logged in");
-                reply.type("html").send(render_fragment("navbar-right-not-logged-in.html"));
+                reply
+                    .type("html")
+                    .send(render_fragment("navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
                 return;
             }
 
@@ -209,7 +211,7 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
                 reply.type("html").send(
                     render_fragment("navbar-right-logged-in.html", {
                         first_name: usr.first_name ?? "",
-                        icon_ver: fastify.ICON_VER,
+                        icons_path: amanifest.icons,
                     })
                 );
             } catch (err: any) {

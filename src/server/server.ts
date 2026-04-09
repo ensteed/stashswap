@@ -11,33 +11,24 @@ import { readFileSync } from "fs";
 import template from "./template.js";
 import { create_auth_routes } from "./api/auth.js";
 import { create_profile_routes } from "./api/profile.js";
-import { get_local_ip } from "./util.js";
 import { create_user_routes } from "./api/users.js";
 import * as emapi from "./services/email.js";
 import { is_http_error, create_err_resp } from "./api/error.js";
+import { config } from "./config.js";
+import { amanifest } from "./assets.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const mdb_uri = process.env.MONGODB_URI!;
-asrt(mdb_uri);
-
-const port = process.env.PORT!;
-asrt(port);
-
-const manifest = JSON.parse(readFileSync("public/asset-manifest.json", "utf8"));
-const ICON_VER = manifest["icons.svg"] as string;
-
+const mdb_uri = config.mongodb_uri;
 const mdb_client = new MongoClient(mdb_uri);
+const port = parseInt(config.port);
 
 async function start_server() {
     await mdb_client.connect();
     ilog("Connected to db");
 
     const fastify = Fastify();
-
-    fastify.decorate("ICON_VER", ICON_VER);
-
     fastify.addHook("onRequest", async (request) => {
         dlog("Request URL:", request.url);
     });
@@ -50,7 +41,13 @@ async function start_server() {
     });
 
     fastify.get("/", async (_request, reply) => {
-        const html = template.render_fragment("index.html", { main_content_html: "{{> landing.html}}" });
+        const params = {
+            client_entry_point: amanifest.main,
+            client_css: amanifest.css,
+            main_content_html: "{{> landing.html}}",
+        };
+        ilog("Should be using params", params);
+        const html = template.render_fragment("index.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
 
@@ -63,12 +60,22 @@ async function start_server() {
     });
 
     fastify.get("/orders", async (_request, reply) => {
-        const html = template.render_fragment("index.html", { main_content_html: "{{> orders.html}}" });
+        const params = {
+            client_entry_point: amanifest.main,
+            client_css: amanifest.css,
+            main_content_html: "{{> orders.html}}",
+        };
+        const html = template.render_fragment("index.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
 
     fastify.get("/messages", async (_request, reply) => {
-        const html = template.render_fragment("index.html", { main_content_html: "{{> messages.html}}" });
+        const params = {
+            client_entry_point: amanifest.main,
+            client_css: amanifest.css,
+            main_content_html: "{{> messages.html}}",
+        };
+        const html = template.render_fragment("index.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
 
@@ -88,18 +95,19 @@ async function start_server() {
 
     fastify.setErrorHandler(async (err: any, _request, reply) => {
         if (is_http_error(err)) {
-            reply.status(err.status as number).type("html").send(create_err_resp(err));
+            reply
+                .status(err.status as number)
+                .type("html")
+                .send(create_err_resp(err));
         } else {
             elog("Unexpected error in request handler:", err);
         }
     });
 
     try {
-        await fastify.listen({ port: parseInt(port), host: "0.0.0.0" });
-        const local_ip = get_local_ip();
+        await fastify.listen({ port: port });
         ilog(`Server listening at:`);
         ilog(`- Local:   http://localhost:${port}`);
-        ilog(`- Network: http://${local_ip}:${port}`);
     } catch (err) {
         elog("Server failed to start:", err);
     }
