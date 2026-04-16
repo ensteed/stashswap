@@ -9,11 +9,11 @@ import { MongoClient } from "mongodb";
 import { readFileSync } from "fs";
 
 import template from "./template.js";
-import { create_auth_routes } from "./api/auth.js";
-import { create_profile_routes } from "./api/profile.js";
-import { create_user_routes } from "./api/users.js";
+import { create_auth_routes } from "./web/auth.js";
+import { create_profile_routes } from "./web/profile.js";
+import { create_user_routes } from "./web/users.js";
 import * as emapi from "./services/email.js";
-import { is_http_error, create_err_resp } from "./api/error.js";
+import { is_http_error, create_err_resp } from "./web/error.js";
 import { config } from "./config.js";
 import { amanifest } from "./assets.js";
 
@@ -78,6 +78,17 @@ async function start_server() {
         const html = template.render_fragment("index.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
+
+    fastify.get("/settings", async (_request, reply) => {
+        const params = {
+            client_entry_point: amanifest.main,
+            client_css: amanifest.css,
+            main_content_html: "{{> settings.html}}",
+        };
+        const html = template.render_fragment("index.html", params);
+        reply.type("html").send(template.render_loaded_fragment(html));
+    });
+    
 
     fastify.get("/test-email", async (_request, _reply) => {
         const em_body: emapi.email_body = {

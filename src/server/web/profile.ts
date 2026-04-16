@@ -112,7 +112,13 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
                 profile_about: usr.profile?.about,
             });
 
-            const index_html = render_fragment("index.html", { main_content_html: html_txt });
+            const params = {
+                client_entry_point: amanifest.main,
+                client_css: amanifest.css,
+                main_content_html: html_txt,
+            };
+            
+            const index_html = render_fragment("index.html", params);
             reply.type("html").send(index_html);
         };
 

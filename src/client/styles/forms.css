@@ -1,4 +1,3 @@
-.profile,
 .settings {
     padding: 1rem;
     margin: 1rem 0;
@@ -7,7 +6,6 @@
     border-radius: 8px;
 }
 
-form.edit-profile,
 form.edit-settings {
     display: flex;
     flex-direction: column;
