@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Listing Mock</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Raleway:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./listing-example.css">
+</head>
+<body>
+    <main class="listing-page">
+
+        <!-- Photo gallery + purchase panel -->
+        <section class="listing-hero">
+
+            <div class="gallery">
+                <div class="gallery-main photo-main"></div>
+                <div class="gallery-thumbs">
+                    <div class="thumb thumb-active photo-main"></div>
+                    <div class="thumb photo-two"></div>
+                    <div class="thumb photo-three"></div>
+                    <div class="thumb photo-four"></div>
+                </div>
+            </div>
+
+            <div class="purchase-panel panel">
+                <p class="eyebrow">Fingering Weight · Superwash Merino</p>
+                <h1>Madelinetosh Tosh Sock</h1>
+                <p class="colorway">Colorway: <strong>Scarlet</strong></p>
+
+                <div class="badge-row">
+                    <span class="badge badge-condition">Lightly Used</span>
+                    <span class="badge badge-quantity">2 skeins available</span>
+                </div>
+
+                <div class="price-row">
+                    <span class="price">$18</span>
+                    <span class="price-sub">/ skein</span>
+                </div>
+
+                <div class="qty-row">
+                    <label for="qty">Quantity</label>
+                    <div class="qty-control">
+                        <button class="qty-btn" aria-label="Decrease">−</button>
+                        <input id="qty" type="number" value="1" min="1" max="2">
+                        <button class="qty-btn" aria-label="Increase">+</button>
+                    </div>
+                    <span class="qty-max">2 max</span>
+                </div>
+
+                <div class="cta-stack">
+                    <button class="btn btn-primary">Add to Cart</button>
+                    <button class="btn btn-secondary">Buy Now</button>
+                </div>
+
+                <div class="shipping-note">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <rect x="1" y="3" width="15" height="13" rx="2"/>
+                        <path d="M16 8h4l3 5v4h-7V8z"/>
+                        <circle cx="5.5" cy="18.5" r="2.5"/>
+                        <circle cx="18.5" cy="18.5" r="2.5"/>
+                    </svg>
+                    Ships within 3 business days · USPS First Class
+                </div>
+            </div>
+        </section>
+
+        <section class="listing-body">
+            <div class="details-column">
+
+                <!-- Yarn specs -->
+                <article class="panel specs-panel">
+                    <h2>Yarn Details</h2>
+                    <dl class="spec-grid">
+                        <div class="spec-item">
+                            <dt>Brand</dt>
+                            <dd>Madelinetosh</dd>
+                        </div>
+                        <div class="spec-item">
+                            <dt>Line</dt>
+                            <dd>Tosh Sock</dd>
+                        </div>
+                        <div class="spec-item">
+                            <dt>Weight</dt>
+                            <dd>Fingering (1)</dd>
+                        </div>
+                        <div class="spec-item">
+                            <dt>Fiber</dt>
+                            <dd>100% Superwash Merino</dd>
+                        </div>
+                        <div class="spec-item">
+                            <dt>Yardage</dt>
+                            <dd>395 yds / skein</dd>
+                        </div>
+                        <div class="spec-item">
+                            <dt>Grams</dt>
+                            <dd>100g / skein</dd>
+                        </div>
+                        <div class="spec-item">
+                            <dt>Dye Lot</dt>
+                            <dd>Same lot · both skeins</dd>
+                        </div>
+                        <div class="spec-item">
+                            <dt>Colorway</dt>
+                            <dd>Scarlet (semi-solid)</dd>
+                        </div>
+                    </dl>
+                </article>
+
+                <!-- Seller notes -->
+                <article class="panel notes-panel">
+                    <h2>Seller Notes</h2>
+                    <p>These were wound into cakes and swatched — about 5 yards used from one skein total. Both are from the same dye lot and have been stored in a smoke-free, pet-free home. The color is a rich, saturated crimson with slight tonal variation typical of the Tosh line. Perfect for a pair of socks or a small colorwork project.</p>
+                </article>
+
+                <!-- Tags -->
+                <article class="panel tags-panel">
+                    <h2>Tags</h2>
+                    <div class="tag-row">
+                        <span>Merino</span>
+                        <span>Sock Yarn</span>
+                        <span>Red</span>
+                        <span>Semi-Solid</span>
+                        <span>Hand Dyed</span>
+                        <span>Superwash</span>
+                    </div>
+                </article>
+            </div>
+
+            <aside class="sidebar">
+
+                <!-- Seller card -->
+                <article class="panel seller-panel">
+                    <p class="eyebrow">Listed by</p>
+                    <div class="seller-identity">
+                        <div class="avatar">KW</div>
+                        <div>
+                            <h2>Kira Walsh</h2>
+                            <p class="seller-location">Portland, Oregon</p>
+                        </div>
+                    </div>
+                    <div class="seller-stats">
+                        <div>
+                            <strong>4.8</strong>
+                            <span>Rating</span>
+                        </div>
+                        <div>
+                            <strong>34</strong>
+                            <span>Sales</span>
+                        </div>
+                        <div>
+                            <strong>1 day</strong>
+                            <span>Ships in</span>
+                        </div>
+                    </div>
+                    <a href="#" class="btn btn-secondary seller-btn">View Shop</a>
+                </article>
+
+                <!-- Recent reviews -->
+                <article class="panel review-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">Trust Signals</p>
+                            <h2>Buyer Feedback</h2>
+                        </div>
+                        <span class="rating-pill">4.8 / 5</span>
+                    </div>
+                    <div class="review-list">
+                        <blockquote>
+                            "Yarn exactly as described, packed so carefully. Will buy again!"
+                            <footer>Priya, March 2026</footer>
+                        </blockquote>
+                        <blockquote>
+                            "Fast shipping and the dye lot really was matching — rare for a destash find."
+                            <footer>Lena, January 2026</footer>
+                        </blockquote>
+                    </div>
+                </article>
+
+            </aside>
+        </section>
+    </main>
+</body>
+</html>

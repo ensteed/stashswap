@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Account Settings - YarnCycle</title>
+  <style>
+    :root {
+      --bg: #f8f6f2;
+      --card: #fff;
+      --text: #2f2a26;
+      --muted: #7b746d;
+      --accent: #b86b77;
+      --border: #e7e0d8;
+      --danger: #b54848;
+      --success: #4f7d5c;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; font-family: Inter, system-ui, sans-serif; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 24px;
+    }
+
+    .sidebar, .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .sidebar {
+      padding: 18px;
+      height: fit-content;
+      position: sticky;
+      top: 24px;
+    }
+
+    .sidebar h2 {
+      font-size: 1rem;
+      margin-top: 0;
+      margin-bottom: 16px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+    }
+
+    .nav a.active {
+      background: #f5eaed;
+      color: var(--accent);
+      border-color: #ead3d9;
+      font-weight: 600;
+    }
+
+    .content {
+      display: grid;
+      gap: 20px;
+    }
+
+    .panel {
+      padding: 22px;
+    }
+
+    .panel h3 {
+      margin-top: 0;
+      margin-bottom: 6px;
+    }
+
+    .panel p.section-desc {
+      margin-top: 0;
+      color: var(--muted);
+      margin-bottom: 18px;
+      font-size: 0.95rem;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+      font: inherit;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+
+    .checkboxes {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .checkbox {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: var(--text);
+    }
+
+    .checkbox input {
+      width: auto;
+      margin-top: 3px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .note {
+      background: #fcfaf7;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-top: 12px;
+    }
+
+    .danger-box {
+      border: 1px solid #ebcaca;
+      background: #fff6f6;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .status {
+      color: var(--success);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 860px) {
+      .page {
+        grid-template-columns: 1fr;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 style="margin-bottom: 20px;">Account Settings</h1>
+
+    <div class="page">
+      <aside class="sidebar">
+        <h2>Settings</h2>
+        <nav class="nav">
+          <a href="#" class="active">Account</a>
+          <a href="#">Notifications</a>
+          <a href="#">Shipping</a>
+          <a href="#">Payments & Payouts</a>
+          <a href="#">Privacy</a>
+          <a href="#">Destash Preferences</a>
+          <a href="#">Connected Accounts</a>
+          <a href="#">Danger Zone</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <section class="panel">
+          <h3>Account Info</h3>
+          <p class="section-desc">Manage your login and basic account details.</p>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="firstName">First name</label>
+              <input id="firstName" type="text" value="Sophie" />
+            </div>
+
+            <div class="field">
+              <label for="lastName">Last name</label>
+              <input id="lastName" type="text" value="Jones" />
+            </div>
+
+            <div class="field full">
+              <label for="email">Email address</label>
+              <input id="email" type="email" value="sophie@example.com" />
+            </div>
+
+            <div class="field full">
+              <label for="password">Password</label>
+              <input id="password" type="password" value="password123" />
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary">Save Changes</button>
+            <button class="btn btn-secondary">Cancel</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Shipping Defaults</h3>
+          <p class="section-desc">Set your default return address and processing times for listings.</p>
+
+          <div class="form-grid">
+            <div class="field full">
+              <label for="address">Street address</label>
+              <input id="address" type="text" value="123 Fiber Lane" />
+            </div>
+
+            <div class="field">
+              <label for="city">City</label>
+              <input id="city" type="text" value="Portland" />
+            </div>
+
+            <div class="field">
+              <label for="state">State</label>
+              <input id="state" type="text" value="OR" />
+            </div>
+
+            <div class="field">
+              <label for="zip">ZIP code</label>
+              <input id="zip" type="text" value="97214" />
+            </div>
+
+            <div class="field">
+              <label for="processing">Processing time</label>
+              <select id="processing">
+                <option>1 business day</option>
+                <option selected>2 business days</option>
+                <option>3-5 business days</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary">Save Shipping</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Notification Preferences</h3>
+          <p class="section-desc">Choose which updates you want to receive.</p>
+
+          <div class="checkboxes">
+            <label class="checkbox"><input type="checkbox" checked /> New message notifications</label>
+            <label class="checkbox"><input type="checkbox" checked /> Sales and order updates</label>
+            <label class="checkbox"><input type="checkbox" checked /> Offers and bundle requests</label>
+            <label class="checkbox"><input type="checkbox" /> Weekly marketplace digest</label>
+            <label class="checkbox"><input type="checkbox" /> Marketing emails</label>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary">Save Notifications</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Destash Preferences</h3>
+          <p class="section-desc">Set your marketplace defaults and yarn-specific preferences.</p>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="homeType">Home environment</label>
+              <select id="homeType">
+                <option selected>Smoke-free, pet-friendly</option>
+                <option>Smoke-free, pet-free</option>
+                <option>Not specified</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="trades">Trades</label>
+              <select id="trades">
+                <option>Accepted</option>
+                <option selected>Maybe / case-by-case</option>
+                <option>Not accepted</option>
+              </select>
+            </div>
+
+            <div class="field full">
+              <label for="brands">Favorite brands / tags</label>
+              <input id="brands" type="text" value="Malabrigo, Woolfolk, Hedgehog Fibres, sock yarn, indie dyed" />
+            </div>
+
+            <div class="field full">
+              <label for="sellerNote">Default seller note</label>
+              <textarea id="sellerNote">Stored in sealed bins in a smoke-free home. Happy to combine shipping for multiple skeins.</textarea>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary">Save Preferences</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Payments & Payouts</h3>
+          <p class="section-desc">Manage where your sales earnings go.</p>
+
+          <p class="status">Stripe account connected</p>
+          <div class="actions">
+            <button class="btn btn-secondary">Manage Payout Account</button>
+            <button class="btn btn-secondary">View Transaction History</button>
+          </div>
+          <div class="note">
+            Your payout details are handled securely by our payment processor.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h3>Danger Zone</h3>
+          <p class="section-desc">These actions are permanent, so be careful.</p>
+
+          <div class="danger-box">
+            <p style="margin-top:0;"><strong>Deactivate or delete account</strong></p>
+            <p style="color:var(--muted); margin-bottom:14px;">
+              Deactivating hides your listings. Deleting permanently removes your account and cannot be undone.
+            </p>
+            <div class="actions">
+              <button class="btn btn-secondary">Deactivate Account</button>
+              <button class="btn btn-danger">Delete Account</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

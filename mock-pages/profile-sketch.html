@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Destash Profile - YarnCycle</title>
+  <style>
+    :root {
+      --bg: #f8f6f2;
+      --card: #ffffff;
+      --text: #2f2a26;
+      --muted: #7b746d;
+      --accent: #b86b77;
+      --accent-soft: #f3d9de;
+      --border: #e7e0d8;
+      --success: #4f7d5c;
+      --shadow: 0 8px 24px rgba(0,0,0,0.07);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .profile-header {
+      background: linear-gradient(135deg, #f7e5e9, #f3efe8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      display: grid;
+      grid-template-columns: 120px 1fr auto;
+      gap: 24px;
+      align-items: center;
+      box-shadow: var(--shadow);
+    }
+
+    .avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #d9c3c8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .profile-meta h1 {
+      font-size: 2rem;
+      margin-bottom: 6px;
+    }
+
+    .profile-meta p {
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .badge {
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .profile-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 14px;
+    }
+
+    .sidebar-section + .sidebar-section {
+      margin-top: 18px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat {
+      background: #fcfaf7;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 1.2rem;
+      margin-bottom: 4px;
+    }
+
+    .list {
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .list li {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      background: #f6f2ed;
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 18px;
+    }
+
+    .listing {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      background: white;
+    }
+
+    .listing-image {
+      height: 160px;
+      background: linear-gradient(135deg, #dbc6b0, #e9d8d3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 2rem;
+    }
+
+    .listing-body {
+      padding: 14px;
+    }
+
+    .listing-body h3 {
+      font-size: 1rem;
+      margin-bottom: 6px;
+    }
+
+    .listing-body p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+    }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+    }
+
+    .status {
+      color: var(--success);
+      font-size: 0.85rem;
+    }
+
+    .review {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .review:last-child {
+      border-bottom: none;
+    }
+
+    .review strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .review span {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 840px) {
+      .profile-header {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+
+      .profile-actions {
+        flex-direction: row;
+        justify-content: center;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .avatar {
+        margin: 0 auto;
+      }
+
+      .badges {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="profile-header">
+      <div class="avatar">SJ</div>
+
+      <div class="profile-meta">
+        <h1>Sophie J.</h1>
+        <p>Knitter, crocheter, and proud yarn destasher from Portland, OR</p>
+        <div class="badges">
+          <span class="badge">⭐ 4.9 Seller Rating</span>
+          <span class="badge">📦 128 Sales</span>
+          <span class="badge">🧶 Indie-Dyed Lover</span>
+          <span class="badge">✅ Verified Seller</span>
+        </div>
+      </div>
+
+      <div class="profile-actions">
+        <button class="btn btn-primary">Follow</button>
+        <button class="btn btn-secondary">Message</button>
+      </div>
+    </section>
+
+    <div class="layout">
+      <aside>
+        <div class="card sidebar-section">
+          <h2>About</h2>
+          <p style="color: var(--muted);">
+            I’m downsizing my stash and listing gently stored yarn from a smoke-free, cat-friendly home.
+            Mostly sock yarn, merino blends, and the occasional sweater quantity.
+          </p>
+        </div>
+
+        <div class="card sidebar-section">
+          <h2>Seller Stats</h2>
+          <div class="stats">
+            <div class="stat">
+              <strong>43</strong>
+              <span>Active Listings</span>
+            </div>
+            <div class="stat">
+              <strong>128</strong>
+              <span>Sales</span>
+            </div>
+            <div class="stat">
+              <strong>4.9</strong>
+              <span>Avg Rating</span>
+            </div>
+            <div class="stat">
+              <strong>2 hrs</strong>
+              <span>Reply Time</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card sidebar-section">
+          <h2>Preferences</h2>
+          <ul class="list">
+            <li>Ships within 2 business days</li>
+            <li>Open to bundle discounts</li>
+            <li>Trades: Maybe</li>
+            <li>Accepts PayPal & Stripe</li>
+          </ul>
+        </div>
+      </aside>
+
+      <main>
+        <div class="card">
+          <div class="tabs">
+            <div class="tab active">Listings</div>
+            <div class="tab">Sold</div>
+            <div class="tab">Reviews</div>
+            <div class="tab">Favorites</div>
+          </div>
+
+          <div class="grid">
+            <article class="listing">
+              <div class="listing-image">🧶</div>
+              <div class="listing-body">
+                <h3>Malabrigo Sock - Teal Fade</h3>
+                <p>2 skeins · Fingering · 100% Merino</p>
+                <div class="price-row">
+                  <span>$34</span>
+                  <span class="status">Available</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="listing">
+              <div class="listing-image">🧺</div>
+              <div class="listing-body">
+                <h3>Woolfolk Bundle - Neutral Tones</h3>
+                <p>5 skeins · DK · Alpaca/Merino</p>
+                <div class="price-row">
+                  <span>$78</span>
+                  <span class="status">Available</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="listing">
+              <div class="listing-image">🌸</div>
+              <div class="listing-body">
+                <h3>Indie Dyed Sock Set - Rose Gold</h3>
+                <p>1 full skein + mini · Fingering</p>
+                <div class="price-row">
+                  <span>$26</span>
+                  <span class="status">Available</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="listing">
+              <div class="listing-image">☁️</div>
+              <div class="listing-body">
+                <h3>Mohair Lace Pair - Cloud Grey</h3>
+                <p>2 balls · Lace · Kid Mohair/Silk</p>
+                <div class="price-row">
+                  <span>$22</span>
+                  <span class="status">Available</span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <h2>Recent Reviews</h2>
+
+          <div class="review">
+            <strong>★★★★★ Emily R.</strong>
+            <span>Beautiful yarn, exactly as described, and shipped super fast.</span>
+          </div>
+
+          <div class="review">
+            <strong>★★★★★ Dana K.</strong>
+            <span>Excellent seller! Packaging was neat and the yarn was in perfect condition.</span>
+          </div>
+
+          <div class="review">
+            <strong>★★★★☆ Marisol T.</strong>
+            <span>Great communication and fair prices. Would definitely buy again.</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
