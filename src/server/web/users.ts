@@ -3,6 +3,7 @@ import { MongoClient, ObjectId, Collection, type InsertOneResult } from "mongodb
 import bc from "bcrypt";
 import { create_err_resp, rethrow_http_error, make_http_error } from "./error.js";
 import { create_logged_in_resp } from "./auth.js";
+import { config } from "../config.js";
 
 export interface ss_user_profile {
     pfp_s3_key: string;
@@ -150,9 +151,8 @@ async function create_user(new_user: ss_user, users: Collection<ss_user>): Promi
 
 export function create_user_routes(mongo_client: MongoClient): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
-        const db = mongo_client.db(process.env.DB_NAME);
-        const coll_name = process.env.USER_COLLECTION_NAME!;
-        const users = db.collection<ss_user>(coll_name);
+        const db = mongo_client.db(config.mongo.db);
+        const users = db.collection<ss_user>(config.mongo.users);
 
         async function create_user_req(request: FastifyRequest, reply: FastifyReply) {
             const body = request.body as Record<string, string>;

@@ -20,9 +20,9 @@ import { amanifest } from "./assets.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const mdb_uri = config.mongodb_uri;
+const mdb_uri = config.mongo.uri;
 const mdb_client = new MongoClient(mdb_uri);
-const port = parseInt(config.port);
+const port = config.port;
 
 async function start_server() {
     await mdb_client.connect();

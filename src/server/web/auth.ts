@@ -7,6 +7,7 @@ import template, { render_fragment, render_loaded_fragment } from "../template.j
 import { rethrow_http_error, make_http_error, create_err_resp } from "./error.js";
 import type { ss_user } from "./users.js";
 import { amanifest } from "../assets.js";
+import { config } from "../config.js";
 
 declare module "fastify" {
     interface FastifyRequest {
@@ -14,7 +15,7 @@ declare module "fastify" {
     }
 }
 
-const SECRET_JWT_KEY = process.env.SECRET_JWT_KEY!;
+const SECRET_JWT_KEY = config.auth.secret_jwt_key;
 asrt(SECRET_JWT_KEY);
 
 export type liuser_payload = jwt.JwtPayload & {
@@ -155,9 +156,8 @@ async function create_fake_login_timeout(usr: ss_user): Promise<string> {
 
 export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
-        const db = mongo_client.db(process.env.DB_NAME);
-        const coll_name = process.env.USER_COLLECTION_NAME!;
-        const users = db.collection<ss_user>(coll_name);
+        const db = mongo_client.db(config.mongo.db);
+        const users = db.collection<ss_user>(config.mongo.users);
 
         const login = async (request: FastifyRequest, reply: FastifyReply) => {
             try {

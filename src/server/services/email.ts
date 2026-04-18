@@ -1,7 +1,7 @@
 import { config } from "../config.js";
 import { Resend, type CreateEmailResponse } from "resend";
 
-const resend = new Resend(config.resend_api_key);
+const resend = new Resend(config.resend.api_key);
 
 export interface email_body {
     to: string | string[];

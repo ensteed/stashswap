@@ -11,7 +11,7 @@ import type { ss_user } from "./users.js";
 import { make_http_error, is_http_error } from "./error.js";
 import {amanifest} from "../assets.js";
 
-const s3 = new S3Client({ region: config.s3_region });
+const s3 = new S3Client({ region: config.aws.s3_region });
 
 async function sanitize_profile_pic(file_buffer: Buffer) {
     const sharp_img = sharp(file_buffer)
@@ -38,7 +38,7 @@ async function update_user(user_id: string, update_op: UpdateFilter<ss_user>, us
 async function upload_profile_pic_to_s3(user_id: string, data: Buffer) {
     const s3_key = `${user_id}.webp`;
     const cmd = new PutObjectCommand({
-        Bucket: config.s3_profile_pics_bucket,
+        Bucket: config.aws.s3_profile_pics_bucket,
         Key: s3_key,
         Body: data,
         ContentType: "image/webp",
@@ -54,8 +54,8 @@ async function upload_profile_pic_to_s3(user_id: string, data: Buffer) {
 
 function verify_buffer_is_image(buf: Buffer): boolean {
     const is_jpeg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
-    const is_png = buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    const is_riff = buf.slice(0, 4).toString() === "RIFF" && buf.slice(8, 12).toString() === "WEBP";
+    const is_png = buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const is_riff = buf.subarray(0, 4).toString() === "RIFF" && buf.subarray(8, 12).toString() === "WEBP";
     return is_jpeg || is_png || is_riff;
 }
 
@@ -91,9 +91,8 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
     return async (fastify: FastifyInstance) => {
         await fastify.register(fastifyMultipart, { limits: { fileSize: 4 * 1024 * 1024 } });
 
-        const db = mongo_client.db(process.env.DB_NAME);
-        const coll_name = process.env.USER_COLLECTION_NAME!;
-        const users = db.collection<ss_user>(coll_name);
+        const db = mongo_client.db(config.mongo.db);
+        const users = db.collection<ss_user>(config.mongo.users);
 
         const edit_profile = async (request: FastifyRequest, reply: FastifyReply) => {
             const liusr = request.liuser as liuser_payload;
@@ -139,7 +138,7 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
 
                 const data = await sanitize_profile_pic(buffer);
 
-                const pfp_s3_key = `${config.s3_base_url}/${usr.id}.webp`;
+                const pfp_s3_key = `${config.aws.s3_base_url}/${usr.id}.webp`;
                 const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
                 const result = await update_user(usr.id, update_op, users);
 

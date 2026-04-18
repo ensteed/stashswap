@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Create Listing – StashSwap</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Raleway:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-primary: #e07a5f;
+            --color-primary-darker: #c05a3f;
+            --color-secondary: #81b29a;
+            --color-neutral: #fdfbf7;
+            --color-neutral-darker: #efe7dc;
+            --color-accent: #f2cc8f;
+            --color-text: #3d404b;
+            --color-muted: #6a6d75;
+            --color-border: rgba(61, 64, 75, 0.12);
+            --color-shadow: rgba(61, 64, 75, 0.14);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Nunito", sans-serif;
+            color: var(--color-text);
+            background:
+                radial-gradient(circle at top right, rgba(129, 178, 154, 0.28), transparent 30%),
+                linear-gradient(180deg, #fffaf2 0%, #fdfbf7 35%, #f6f1e9 100%);
+        }
+
+        a { color: inherit; text-decoration: none; }
+
+        .page-wrap {
+            width: min(860px, calc(100% - 2rem));
+            margin: 0 auto;
+            padding: 2rem 0 4rem;
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        /* ── Page header ── */
+        .page-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .page-header h1 {
+            font-family: "Raleway", sans-serif;
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            margin: 0;
+        }
+
+        .page-header p {
+            margin: 0.3rem 0 0;
+            color: var(--color-muted);
+            font-size: 0.95rem;
+        }
+
+        /* ── Panel ── */
+        .panel {
+            border: 1px solid var(--color-border);
+            border-radius: 28px;
+            box-shadow: 0 18px 50px -28px var(--color-shadow);
+            background: rgba(253, 251, 247, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 1.75rem;
+        }
+
+        .panel-title {
+            font-family: "Raleway", sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0 0 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .panel-title .step {
+            display: grid;
+            place-items: center;
+            width: 1.8rem;
+            height: 1.8rem;
+            border-radius: 50%;
+            background: var(--color-primary);
+            color: var(--color-neutral);
+            font-size: 0.78rem;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+
+        /* ── Photo upload zone ── */
+        .photo-zone {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .drop-area {
+            border: 2px dashed rgba(224, 122, 95, 0.45);
+            border-radius: 22px;
+            background: rgba(224, 122, 95, 0.04);
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: background 160ms ease, border-color 160ms ease;
+        }
+
+        .drop-area:hover {
+            background: rgba(224, 122, 95, 0.09);
+            border-color: rgba(224, 122, 95, 0.7);
+        }
+
+        .drop-icon {
+            font-size: 2.2rem;
+            display: block;
+            margin-bottom: 0.6rem;
+        }
+
+        .drop-area strong {
+            display: block;
+            font-size: 1rem;
+            font-weight: 800;
+            margin-bottom: 0.3rem;
+        }
+
+        .drop-area p {
+            margin: 0;
+            font-size: 0.88rem;
+            color: var(--color-muted);
+        }
+
+        .photo-thumbs {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .photo-thumb {
+            position: relative;
+            width: 90px;
+            height: 90px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid var(--color-border);
+            flex-shrink: 0;
+        }
+
+        .photo-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-thumb .remove-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 1.4rem;
+            height: 1.4rem;
+            border-radius: 50%;
+            background: rgba(61, 64, 75, 0.75);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 0.75rem;
+            display: grid;
+            place-items: center;
+        }
+
+        .photo-thumb-placeholder {
+            background:
+                linear-gradient(135deg, rgba(224, 122, 95, 0.15), transparent),
+                linear-gradient(160deg, #c94040 0%, #e07a5f 55%, #f2cc8f 100%);
+        }
+
+        .photo-hint {
+            font-size: 0.83rem;
+            color: var(--color-muted);
+        }
+
+        /* ── Form grid ── */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.1rem;
+        }
+
+        .field {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .field.full { grid-column: 1 / -1; }
+        .field.third { grid-column: span 1; }
+
+        label {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: var(--color-text);
+        }
+
+        label .hint {
+            font-weight: 400;
+            color: var(--color-muted);
+            margin-left: 0.3rem;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: 14px;
+            background: rgba(253, 251, 247, 0.85);
+            font-family: "Nunito", sans-serif;
+            font-size: 0.95rem;
+            color: var(--color-text);
+            transition: border-color 150ms ease, box-shadow 150ms ease;
+            -webkit-appearance: none;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(224, 122, 95, 0.18);
+        }
+
+        textarea { resize: vertical; min-height: 110px; }
+
+        .three-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.1rem;
+        }
+
+        /* ── Pricing row ── */
+        .price-fields {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.1rem;
+        }
+
+        .input-prefix {
+            position: relative;
+        }
+
+        .input-prefix span {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-weight: 700;
+            color: var(--color-muted);
+            pointer-events: none;
+        }
+
+        .input-prefix input {
+            padding-left: 1.75rem;
+        }
+
+        /* ── Tag input ── */
+        .tag-input-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 14px;
+            background: rgba(253, 251, 247, 0.85);
+            cursor: text;
+            min-height: 3rem;
+            align-items: center;
+        }
+
+        .tag-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.28rem 0.7rem;
+            border-radius: 999px;
+            background: rgba(224, 122, 95, 0.12);
+            font-size: 0.83rem;
+            font-weight: 800;
+        }
+
+        .tag-pill button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            font-size: 0.85rem;
+            color: var(--color-muted);
+            line-height: 1;
+        }
+
+        .tag-input-wrap input {
+            border: none;
+            outline: none;
+            background: transparent;
+            padding: 0.2rem 0.25rem;
+            font-family: "Nunito", sans-serif;
+            font-size: 0.9rem;
+            min-width: 120px;
+            flex: 1;
+        }
+
+        /* ── Shipping / home note ── */
+        .radio-group {
+            display: grid;
+            gap: 0.6rem;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--color-border);
+            border-radius: 14px;
+            cursor: pointer;
+            transition: border-color 150ms ease, background 150ms ease;
+        }
+
+        .radio-option:has(input:checked) {
+            border-color: var(--color-secondary);
+            background: rgba(129, 178, 154, 0.08);
+        }
+
+        .radio-option input[type="radio"] {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
+            accent-color: var(--color-secondary);
+        }
+
+        .radio-option .label-text {
+            font-size: 0.92rem;
+            font-weight: 700;
+        }
+
+        .radio-option .label-sub {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 400;
+            color: var(--color-muted);
+            margin-top: 0.1rem;
+        }
+
+        /* ── Preview strip ── */
+        .preview-strip {
+            border: 1px solid var(--color-border);
+            border-radius: 28px;
+            background: linear-gradient(135deg, rgba(242, 204, 143, 0.15), rgba(129, 178, 154, 0.08));
+            padding: 1.25rem 1.75rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+        }
+
+        .preview-thumb {
+            width: 72px;
+            height: 72px;
+            border-radius: 16px;
+            flex-shrink: 0;
+            background: linear-gradient(160deg, #c94040 0%, #e07a5f 55%, #f2cc8f 100%);
+        }
+
+        .preview-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .preview-info .preview-title {
+            font-family: "Raleway", sans-serif;
+            font-weight: 700;
+            font-size: 1.05rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .preview-info .preview-meta {
+            font-size: 0.85rem;
+            color: var(--color-muted);
+            margin-top: 0.25rem;
+        }
+
+        .preview-price {
+            font-family: "Raleway", sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* ── Action bar ── */
+        .action-bar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            padding: 0.85rem 1.6rem;
+            border-radius: 999px;
+            font-family: "Nunito", sans-serif;
+            font-weight: 800;
+            font-size: 0.95rem;
+            border: none;
+            cursor: pointer;
+            transition: transform 180ms ease, background-color 180ms ease;
+            text-decoration: none;
+        }
+
+        .btn:hover { transform: translateY(-1px); }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: var(--color-neutral);
+        }
+
+        .btn-primary:hover { background: var(--color-primary-darker); }
+
+        .btn-secondary {
+            background: rgba(129, 178, 154, 0.15);
+            color: var(--color-text);
+        }
+
+        .btn-secondary:hover { background: rgba(129, 178, 154, 0.28); }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--color-muted);
+            border: 1px solid var(--color-border);
+        }
+
+        .btn-ghost:hover { background: var(--color-neutral-darker); }
+
+        /* ── Dividers ── */
+        .section-divider {
+            height: 1px;
+            background: var(--color-border);
+            margin: 1.5rem 0;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .page-wrap { width: calc(100% - 1.5rem); padding-top: 1.25rem; }
+            .panel { padding: 1.25rem; border-radius: 22px; }
+            .form-grid, .three-col, .price-fields { grid-template-columns: 1fr; }
+            .field.full, .field.third { grid-column: auto; }
+            .preview-strip { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page-wrap">
+
+        <!-- Header -->
+        <div class="page-header">
+            <div>
+                <h1>Create a Listing</h1>
+                <p>List yarn, fiber, tools, or patterns from your stash.</p>
+            </div>
+            <a href="#" class="btn btn-ghost">← Back to Dashboard</a>
+        </div>
+
+        <!-- Step 1: Photos -->
+        <section class="panel">
+            <h2 class="panel-title">
+                <span class="step">1</span> Photos
+            </h2>
+            <div class="photo-zone">
+                <div class="drop-area">
+                    <span class="drop-icon">📷</span>
+                    <strong>Drag &amp; drop photos here</strong>
+                    <p>or click to browse · JPG, PNG, WEBP · up to 10 photos · 10 MB each</p>
+                </div>
+                <div class="photo-thumbs">
+                    <!-- First thumb marked as "cover" -->
+                    <div class="photo-thumb photo-thumb-placeholder" style="border-color: var(--color-primary);">
+                        <button class="remove-btn">✕</button>
+                        <span style="position:absolute;bottom:4px;left:6px;font-size:0.65rem;font-weight:800;color:white;background:var(--color-primary);padding:1px 6px;border-radius:999px;">Cover</span>
+                    </div>
+                    <div class="photo-thumb" style="background:linear-gradient(135deg,#e07a5f,#c94040);">
+                        <button class="remove-btn">✕</button>
+                    </div>
+                    <div class="photo-thumb" style="background:linear-gradient(135deg,#f2cc8f,#e07a5f);">
+                        <button class="remove-btn">✕</button>
+                    </div>
+                </div>
+                <p class="photo-hint">First photo is the cover image. Drag to reorder. Good lighting sells listings — natural light works best.</p>
+            </div>
+        </section>
+
+        <!-- Step 2: Yarn Details -->
+        <section class="panel">
+            <h2 class="panel-title">
+                <span class="step">2</span> Yarn Details
+            </h2>
+            <div class="form-grid">
+                <div class="field full">
+                    <label for="title">Listing title</label>
+                    <input id="title" type="text" placeholder="e.g. Madelinetosh Tosh Sock – Scarlet (2 skeins)">
+                </div>
+
+                <div class="field">
+                    <label for="brand">Brand</label>
+                    <input id="brand" type="text" placeholder="e.g. Madelinetosh">
+                </div>
+
+                <div class="field">
+                    <label for="yarn-line">Yarn line</label>
+                    <input id="yarn-line" type="text" placeholder="e.g. Tosh Sock">
+                </div>
+
+                <div class="field">
+                    <label for="colorway">Colorway</label>
+                    <input id="colorway" type="text" placeholder="e.g. Scarlet">
+                </div>
+
+                <div class="field">
+                    <label for="weight">Weight</label>
+                    <select id="weight">
+                        <option value="" disabled selected>Select weight…</option>
+                        <option>Lace (0)</option>
+                        <option>Fingering (1)</option>
+                        <option>Sport (2)</option>
+                        <option>DK (3)</option>
+                        <option>Worsted (4)</option>
+                        <option>Bulky (5)</option>
+                        <option>Super Bulky (6)</option>
+                        <option>Jumbo (7)</option>
+                        <option>Other / unknown</option>
+                    </select>
+                </div>
+
+                <div class="field full">
+                    <label for="fiber">Fiber content</label>
+                    <input id="fiber" type="text" placeholder="e.g. 100% Superwash Merino">
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="three-col">
+                <div class="field">
+                    <label for="yardage">Yardage <span class="hint">per skein</span></label>
+                    <input id="yardage" type="number" min="0" placeholder="e.g. 395">
+                </div>
+                <div class="field">
+                    <label for="grams">Grams <span class="hint">per skein</span></label>
+                    <input id="grams" type="number" min="0" placeholder="e.g. 100">
+                </div>
+                <div class="field">
+                    <label for="dye-lot">Dye lot</label>
+                    <input id="dye-lot" type="text" placeholder="e.g. Same lot">
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 3: Condition & Quantity -->
+        <section class="panel">
+            <h2 class="panel-title">
+                <span class="step">3</span> Condition &amp; Quantity
+            </h2>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="condition">Condition</label>
+                    <select id="condition">
+                        <option value="" disabled selected>Select condition…</option>
+                        <option>New / Never wound</option>
+                        <option>New / Wound into cake</option>
+                        <option>Lightly used (swatched)</option>
+                        <option>Partial skein</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="home-env">Home environment</label>
+                    <select id="home-env">
+                        <option value="" disabled selected>Select…</option>
+                        <option>Smoke-free, pet-free</option>
+                        <option>Smoke-free, pet-friendly</option>
+                        <option>Not specified</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="quantity">Quantity (skeins)</label>
+                    <input id="quantity" type="number" min="1" value="1">
+                </div>
+
+                <div class="field">
+                    <label for="category">Category</label>
+                    <select id="category">
+                        <option value="" disabled selected>Select…</option>
+                        <option>Yarn</option>
+                        <option>Fiber / Roving</option>
+                        <option>Needles &amp; Hooks</option>
+                        <option>Patterns</option>
+                        <option>Notions</option>
+                        <option>Kits</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 4: Pricing & Shipping -->
+        <section class="panel">
+            <h2 class="panel-title">
+                <span class="step">4</span> Pricing &amp; Shipping
+            </h2>
+            <div class="price-fields">
+                <div class="field">
+                    <label for="price">Price <span class="hint">per skein</span></label>
+                    <div class="input-prefix">
+                        <span>$</span>
+                        <input id="price" type="number" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="shipping-cost">Shipping cost</label>
+                    <div class="input-prefix">
+                        <span>$</span>
+                        <input id="shipping-cost" type="number" min="0" step="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="processing-time">Processing time</label>
+                    <select id="processing-time">
+                        <option>1 business day</option>
+                        <option selected>2 business days</option>
+                        <option>3–5 business days</option>
+                        <option>1 week</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <p style="margin:0 0 0.75rem; font-size:0.9rem; font-weight:700;">Ships via</p>
+            <div class="radio-group">
+                <label class="radio-option">
+                    <input type="radio" name="shipping-method" value="usps-fc" checked>
+                    <div>
+                        <span class="label-text">USPS First Class</span>
+                        <span class="label-sub">Best for 1–2 skeins under 13 oz</span>
+                    </div>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="shipping-method" value="usps-priority">
+                    <div>
+                        <span class="label-text">USPS Priority Mail</span>
+                        <span class="label-sub">Flat rate or weight-based, 1–3 days</span>
+                    </div>
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="shipping-method" value="other">
+                    <div>
+                        <span class="label-text">Other / buyer's choice</span>
+                        <span class="label-sub">Describe in your notes</span>
+                    </div>
+                </label>
+            </div>
+        </section>
+
+        <!-- Step 5: Description & Tags -->
+        <section class="panel">
+            <h2 class="panel-title">
+                <span class="step">5</span> Description &amp; Tags
+            </h2>
+            <div class="form-grid">
+                <div class="field full">
+                    <label for="description">Seller notes</label>
+                    <textarea id="description" placeholder="Describe the yarn's history, storage, how much has been used, dye lot details, and anything a buyer would want to know…"></textarea>
+                </div>
+
+                <div class="field full">
+                    <label>Tags <span class="hint">press Enter or comma to add</span></label>
+                    <div class="tag-input-wrap">
+                        <span class="tag-pill">Merino <button>✕</button></span>
+                        <span class="tag-pill">Sock Yarn <button>✕</button></span>
+                        <span class="tag-pill">Semi-Solid <button>✕</button></span>
+                        <input type="text" placeholder="Add a tag…">
+                    </div>
+                </div>
+
+                <div class="field full">
+                    <label for="trades">Trades</label>
+                    <select id="trades">
+                        <option>Not accepted</option>
+                        <option selected>Maybe — message me</option>
+                        <option>Accepted</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Listing preview strip -->
+        <div class="preview-strip">
+            <div class="preview-thumb"></div>
+            <div class="preview-info">
+                <div class="preview-title">Madelinetosh Tosh Sock – Scarlet (2 skeins)</div>
+                <div class="preview-meta">Fingering · 100% Superwash Merino · Lightly used · Smoke-free, pet-free</div>
+            </div>
+            <div class="preview-price">$18<span style="font-size:0.9rem;font-weight:400;color:var(--color-muted);">/skein</span></div>
+        </div>
+
+        <!-- Action bar -->
+        <div class="action-bar">
+            <button class="btn btn-ghost">Discard</button>
+            <button class="btn btn-secondary">Save as Draft</button>
+            <button class="btn btn-primary">Publish Listing →</button>
+        </div>
+
+    </main>
+</body>
+</html>
