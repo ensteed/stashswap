@@ -6,16 +6,14 @@ import fastifyStatic from "@fastify/static";
 import path from "path";
 import { fileURLToPath } from "url";
 import { MongoClient } from "mongodb";
-import { readFileSync } from "fs";
 
 import template from "./template.js";
-import { create_auth_routes } from "./web/auth.js";
+import { create_auth_routes, verify_liuser, type liuser_payload } from "./web/auth.js";
 import { create_profile_routes } from "./web/profile.js";
-import { create_user_routes } from "./web/users.js";
+import { create_user_routes, type ss_user } from "./web/users.js";
 import * as emapi from "./services/email.js";
-import { is_http_error, create_err_resp } from "./web/error.js";
+import { is_http_error, create_err_resp, make_http_error } from "./web/error.js";
 import { config } from "./config.js";
-import { amanifest } from "./assets.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,54 +39,39 @@ async function start_server() {
     });
 
     fastify.get("/", async (_request, reply) => {
-        const params = {
-            client_entry_point: amanifest.main,
-            client_css: amanifest.css,
-            main_content_html: "{{> pages/landing.html}}",
-        };
-        ilog("Should be using params", params);
-        const html = template.render_fragment("layout.html", params);
-        reply.type("html").send(template.render_loaded_fragment(html));
-    });
-
-    fastify.get("/login", async (_request, reply) => {
-        reply.type("html").send(template.render_fragment("partials/login.html"));
-    });
-
-    fastify.get("/create-account", async (_request, reply) => {
-        reply.type("html").send(template.render_fragment("partials/create-account.html"));
+        const html = template.render_full_page("landing");
+        reply.type("html").send(html);
     });
 
     fastify.get("/orders", async (_request, reply) => {
-        const params = {
-            client_entry_point: amanifest.main,
-            client_css: amanifest.css,
-            main_content_html: "{{> pages/orders.html}}",
-        };
-        const html = template.render_fragment("layout.html", params);
-        reply.type("html").send(template.render_loaded_fragment(html));
+        reply.type("html").send(template.render_full_page("orders"));
+    });
+
+    // TODO: This needs to move to web/dashboard (pretty much all of these need to move to their own handling thing)
+    fastify.get("/dashboard", {preHandler: verify_liuser}, async (request, reply) => {
+        const usr = request.liuser as liuser_payload;
+        const db = mdb_client.db(config.mongo.db);
+        const users = db.collection<ss_user>(config.mongo.users);
+        let name = "";
+        try {
+            const full_usr = await users.findOne({ _id: usr.id });
+            if (!full_usr) {
+                throw new Error(`User with id ${usr.id} not found in database`);
+            }
+            name = full_usr.first_name;
+        } catch (err: any) {
+            throw make_http_error("Problem with db query: " + err.message, 500);
+        }
+        reply.type("html").send(template.render_full_page("dashboard", {first_name: name}));
     });
 
     fastify.get("/messages", async (_request, reply) => {
-        const params = {
-            client_entry_point: amanifest.main,
-            client_css: amanifest.css,
-            main_content_html: "{{> pages/messages.html}}",
-        };
-        const html = template.render_fragment("layout.html", params);
-        reply.type("html").send(template.render_loaded_fragment(html));
+        reply.type("html").send(template.render_full_page("messages"));
     });
 
     fastify.get("/settings", async (_request, reply) => {
-        const params = {
-            client_entry_point: amanifest.main,
-            client_css: amanifest.css,
-            main_content_html: "{{> pages/settings.html}}",
-        };
-        const html = template.render_fragment("layout.html", params);
-        reply.type("html").send(template.render_loaded_fragment(html));
+        reply.type("html").send(template.render_full_page("settings"));
     });
-    
 
     fastify.get("/test-email", async (_request, _reply) => {
         const em_body: emapi.email_body = {
@@ -104,7 +87,7 @@ async function start_server() {
     fastify.register(create_auth_routes(mdb_client));
     fastify.register(create_user_routes(mdb_client));
 
-    fastify.setErrorHandler(async (err: any, _request, reply) => {
+    fastify.setErrorHandler((err: any, _request, reply) => {
         if (is_http_error(err)) {
             reply
                 .status(err.status as number)
@@ -113,6 +96,11 @@ async function start_server() {
         } else {
             elog("Unexpected error in request handler:", err);
         }
+    });
+
+    fastify.setNotFoundHandler((request, reply) => {
+        const html = template.render_layout("404", { url: request.url });
+        reply.status(404).type("html").send(html);
     });
 
     try {

@@ -2,8 +2,9 @@ import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply 
 import { MongoClient, ObjectId, Collection, type InsertOneResult } from "mongodb";
 import bc from "bcrypt";
 import { create_err_resp, rethrow_http_error, make_http_error } from "./error.js";
-import { create_logged_in_resp } from "./auth.js";
+import { create_user_session } from "./auth.js";
 import { config } from "../config.js";
+import template from "../template.js";
 
 export interface ss_user_profile {
     pfp_s3_key: string;
@@ -154,34 +155,25 @@ export function create_user_routes(mongo_client: MongoClient): FastifyPluginAsyn
         const db = mongo_client.db(config.mongo.db);
         const users = db.collection<ss_user>(config.mongo.users);
 
-        async function create_user_req(request: FastifyRequest, reply: FastifyReply) {
+        async function handle_create_user_and_login(request: FastifyRequest, reply: FastifyReply) {
             const body = request.body as Record<string, string>;
             const new_user = { ...DEFAULT_USER, ...body };
             new_user.first_name = body["name"] ?? "";
             new_user.last_name = "";
             try {
                 await create_user(new_user, users);
+                await create_user_session(reply, new_user._id);
+                reply.header("HX-Redirect", "/dashboard");
+                reply.type("html").send("");
             } catch (err: any) {
                 rethrow_http_error(err);
                 reply.type("html").send(create_err_resp(err));
             }
         }
 
-        async function create_user_and_login_req(request: FastifyRequest, reply: FastifyReply) {
-            const body = request.body as Record<string, string>;
-            const new_user = { ...DEFAULT_USER, ...body };
-            new_user.first_name = body["name"] ?? "";
-            new_user.last_name = "";
-            try {
-                await create_user(new_user, users);
-                reply.type("html").send(create_logged_in_resp(new_user));
-            } catch (err: any) {
-                rethrow_http_error(err);
-                reply.type("html").send(create_err_resp(err));
-            }
-        }
-
-        fastify.post("/api/users", create_user_req);
-        fastify.post("/api/users/login", create_user_and_login_req);
+        fastify.post("/create-account", handle_create_user_and_login);
+        fastify.get("/create-account", (_request, reply) => {
+            reply.type("html").send(template.render_partial("create-account"));
+        });
     };
 }

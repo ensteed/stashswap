@@ -3,7 +3,7 @@ import { MongoClient, Collection } from "mongodb";
 import bc from "bcrypt";
 import jwt from "jsonwebtoken";
 
-import template, { render_fragment, render_loaded_fragment } from "../template.js";
+import template from "../template.js";
 import { rethrow_http_error, make_http_error, create_err_resp } from "./error.js";
 import type { ss_user } from "./users.js";
 import { amanifest } from "../assets.js";
@@ -23,20 +23,9 @@ export type liuser_payload = jwt.JwtPayload & {
 };
 
 export function send_unauthorized_response(reply: FastifyReply) {
-    const login_html = template.render_fragment("partials/login.html", { hidden_class: "hidden" });
-    const index_with_login = template.render_fragment("layout.html", { sign_in_fragment: login_html });
+    const login_html = template.render_partial("login", { hidden_class: "hidden" });
+    const index_with_login = template.render_view("layout.html", { sign_in_fragment: login_html });
     reply.status(200).type("html").send(index_with_login);
-}
-
-export function create_logged_in_resp(usr: ss_user): string {
-    const remove_modal = `<div id="modal-root" hx-swap-oob="true"></div>`;
-    const main_page = `<div id="main-content" hx-swap-oob="true">{{> pages/dashboard.html}}</div>`;
-    const replaced_navbar = `{{> partials/navbar-right-logged-in.html}}`;
-    const html = render_loaded_fragment(remove_modal + main_page + replaced_navbar, {
-        first_name: usr.first_name,
-        icons_path: amanifest.icons,
-    });
-    return html;
 }
 
 async function verify_token(token: string) {
@@ -109,7 +98,7 @@ async function compare_password(pt_pwd: string, hashed_pwd: string): Promise<boo
     }
 }
 
-async function create_user_session(reply: FastifyReply, user_id: string) {
+export async function create_user_session(reply: FastifyReply, user_id: string) {
     try {
         const token = await sign_token(user_id);
         reply.setCookie("token", token, {
@@ -146,10 +135,10 @@ export function clear_user_session(reply: FastifyReply) {
     });
 }
 
-async function create_fake_login_timeout(usr: ss_user): Promise<string> {
-    return new Promise<string>((resolve) => {
+async function create_fake_login_timeout(usr: ss_user): Promise<void> {
+    return new Promise<void>((resolve) => {
         setTimeout(() => {
-            resolve(create_logged_in_resp(usr));
+            resolve();
         }, 1000);
     });
 }
@@ -159,6 +148,7 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
         const db = mongo_client.db(config.mongo.db);
         const users = db.collection<ss_user>(config.mongo.users);
 
+        // login returns an error html message if fails, and returns swaps for success.
         const login = async (request: FastifyRequest, reply: FastifyReply) => {
             try {
                 const body = request.body as { email: string; pwd: string };
@@ -179,8 +169,9 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
 
                 await create_user_session(reply, usr._id);
                 ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
-                const login_reply = await create_fake_login_timeout(usr);
-                reply.type("html").send(login_reply);
+                await create_fake_login_timeout(usr);
+                reply.header("HX-Redirect", "/dashboard");
+                reply.type("html").send("");
             } catch (err: any) {
                 rethrow_http_error(err);
                 reply.type("html").send(create_err_resp(err));
@@ -189,15 +180,20 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
 
         const logout = (_request: FastifyRequest, reply: FastifyReply) => {
             clear_user_session(reply);
-            reply.type("html").send(render_fragment("partials/logout.html", { icons_path: amanifest.icons }));
+            reply.type("html").send(template.render_full_page("landing"));
         };
 
         const me = async (request: FastifyRequest, reply: FastifyReply) => {
+            if (!request.headers["hx-request"]) {
+                reply.redirect("/");
+                return;
+            }
+            
             if (!request.liuser) {
                 ilog("me: user not logged in");
                 reply
                     .type("html")
-                    .send(render_fragment("partials/navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
+                    .send(template.render_partial("navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
                 return;
             }
 
@@ -206,10 +202,10 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
                 if (!usr) {
                     throw new Error(`User with id ${request.liuser.id} not found in database`);
                 }
-
+                
                 ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
                 reply.type("html").send(
-                    render_fragment("partials/navbar-right-logged-in.html", {
+                    template.render_partial("navbar-right-logged-in", {
                         first_name: usr.first_name ?? "",
                         icons_path: amanifest.icons,
                     })
@@ -220,8 +216,20 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
             }
         };
 
-        fastify.post("/api/login", login);
-        fastify.post("/api/logout", logout);
-        fastify.get("/api/me", { preHandler: maybe_liuser }, me);
+        const get_login_page = (request: FastifyRequest, reply: FastifyReply) => {
+            const login_html = template.render_partial("login");
+            if (request.headers["hx-request"]) {
+                reply.type("html").send(login_html);
+            }
+            else {
+                const html = template.render_full_page("landing", {}, "layout", { modal_root_content: login_html });
+                reply.type("html").send(html);
+            }
+        }
+
+        fastify.get("/login", get_login_page);
+        fastify.post("/login", login);
+        fastify.post("/logout", logout);
+        fastify.get("/me", { preHandler: maybe_liuser }, me);
     };
 }

@@ -5,14 +5,14 @@
   <meta charset="UTF-8">
   <title>Destash Marketplace</title>
   <script src="https://unpkg.com/htmx.org@2.0.0/dist/htmx.min.js"></script>
-  <script type="module" src={{attr:client_entry_point}} defer></script>
+  <script type="module" src="{{attr:client_entry_point}}" defer></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Roboto:wght@400&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href={{attr:client_css}}>
+  <link rel="stylesheet" href="{{attr:client_css}}">
 </head>
 
 <body>
-  <div id="me-frag" hx-get="api/me" hx-trigger="load" hx-swap="innerHTML"></div>
+  <div id="me-frag" hx-get="/me" hx-trigger="load" hx-swap="innerHTML"></div>
   <!-- Navigation Bar -->
   {{> partials/navbar.html}}
   <!-- Modal dialog root -->

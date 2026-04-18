@@ -112,7 +112,12 @@ function handle_click_dropdown_menus(event: MouseEvent) {
             } else {
                 account_menu.classList.add("hidden");
             }
-        } else if (account_menu && !is_hidden && !is_sep && (target.id === dropdown.menu_id || account_menu.contains(target))) {
+        } else if (
+            account_menu &&
+            !is_hidden &&
+            !is_sep &&
+            (target.id === dropdown.menu_id || account_menu.contains(target))
+        ) {
             account_menu.classList.add("hidden");
         }
     }
@@ -174,6 +179,17 @@ function handle_keydown(event: KeyboardEvent) {
     }
 }
 
+function show_dialog_with_close(dlg: HTMLDialogElement, parent: HTMLElement) {
+    dlg.showModal();
+    dlg.addEventListener(
+        "close",
+        () => {
+            parent.innerHTML = "";
+        },
+        { once: true }
+    );
+}
+
 function handle_htmx_load(event: Event) {
     const target = get_event_element(event.target);
     if (!target) return;
@@ -182,19 +198,22 @@ function handle_htmx_load(event: Event) {
     if (target.classList.contains("temp-item")) {
         fade_and_remove_item(target.id);
     }
+
     // If a modal dialog is being loaded, show it modally and hook to its close to remove it once its closed
-    else if (target.parentElement?.id === ROOT_MODAL_ELEMENT && target instanceof HTMLDialogElement) {
-        console.log("Should show modal");
-        target.showModal();
-        target.addEventListener(
-            "close",
-            () => {
-                if (target.parentElement) {
-                    target.parentElement.innerHTML = "";
-                }
-            },
-            { once: true },
-        );
+    const parent = target.parentElement;
+    if (parent && parent.id === ROOT_MODAL_ELEMENT && target instanceof HTMLDialogElement) {
+        show_dialog_with_close(target, parent);
+    }
+}
+
+function on_dom_content_loaded() {
+    const root_modal = document.getElementById(ROOT_MODAL_ELEMENT);
+    if (root_modal) {
+        for (const child_dlg of root_modal.children) {
+            if (child_dlg instanceof HTMLDialogElement && !child_dlg.open) {
+                show_dialog_with_close(child_dlg, root_modal);
+            }
+        }
     }
 }
 
@@ -206,6 +225,7 @@ function client_init() {
     document.addEventListener("mousedown", handle_mousedown);
     document.addEventListener("keydown", handle_keydown);
     document.addEventListener("htmx:load", handle_htmx_load as EventListener);
+    window.addEventListener("DOMContentLoaded", on_dom_content_loaded);
 }
 
 client_init();

@@ -5,7 +5,7 @@ import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 import { config } from "../config.js";
-import { render_fragment } from "../template.js";
+import { render_view } from "../template.js";
 import { verify_liuser, clear_user_session, type liuser_payload } from "./auth.js";
 import type { ss_user } from "./users.js";
 import { make_http_error, is_http_error } from "./error.js";
@@ -101,11 +101,11 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
             if (!usr) {
                 wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
                 clear_user_session(reply);
-                reply.type("html").send(render_fragment("partials/logout.html", {icons_path: amanifest.icons}));
+                reply.type("html").send(render_view("partials/logout.html", {icons_path: amanifest.icons}));
                 return;
             }
 
-            const html_txt = render_fragment("pages/edit-profile.html", {
+            const html_txt = render_view("pages/edit-profile.html", {
                 pfp_s3_key: usr.profile?.pfp_s3_key ?? "profile_pics/default.png",
                 public_name: usr.profile?.public_name ?? usr.first_name,
                 profile_about: usr.profile?.about,
@@ -117,7 +117,7 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
                 main_content_html: html_txt,
             };
             
-            const index_html = render_fragment("layout.html", params);
+            const index_html = render_view("layout.html", params);
             reply.type("html").send(index_html);
         };
 
@@ -149,7 +149,7 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
                 } else if (result.acknowledged) {
                     wlog(`User ${usr.id} not found in db - likely removed while logged in`);
                     clear_user_session(reply);
-                    reply.type("html").send(render_fragment("partials/logout.html", {icons_path: amanifest.icons}));
+                    reply.type("html").send(render_view("partials/logout.html", {icons_path: amanifest.icons}));
                 } else {
                     throw make_http_error("Database update failed", 500);
                 }
@@ -183,7 +183,7 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
             } else if (result.acknowledged) {
                 wlog(`User ${usr.id} not found in db - likely removed while logged in`);
                 clear_user_session(reply);
-                reply.type("html").send(render_fragment("partials/logout.html", {icons_path: amanifest.icons}));
+                reply.type("html").send(render_view("partials/logout.html", {icons_path: amanifest.icons}));
             } else {
                 throw make_http_error("Database update failed", 500);
             }
