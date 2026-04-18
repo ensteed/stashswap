@@ -44,28 +44,28 @@ async function start_server() {
         const params = {
             client_entry_point: amanifest.main,
             client_css: amanifest.css,
-            main_content_html: "{{> landing.html}}",
+            main_content_html: "{{> pages/landing.html}}",
         };
         ilog("Should be using params", params);
-        const html = template.render_fragment("index.html", params);
+        const html = template.render_fragment("layout.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
 
     fastify.get("/login", async (_request, reply) => {
-        reply.type("html").send(template.render_fragment("login.html"));
+        reply.type("html").send(template.render_fragment("partials/login.html"));
     });
 
     fastify.get("/create-account", async (_request, reply) => {
-        reply.type("html").send(template.render_fragment("create-account.html"));
+        reply.type("html").send(template.render_fragment("partials/create-account.html"));
     });
 
     fastify.get("/orders", async (_request, reply) => {
         const params = {
             client_entry_point: amanifest.main,
             client_css: amanifest.css,
-            main_content_html: "{{> orders.html}}",
+            main_content_html: "{{> pages/orders.html}}",
         };
-        const html = template.render_fragment("index.html", params);
+        const html = template.render_fragment("layout.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
 
@@ -73,9 +73,9 @@ async function start_server() {
         const params = {
             client_entry_point: amanifest.main,
             client_css: amanifest.css,
-            main_content_html: "{{> messages.html}}",
+            main_content_html: "{{> pages/messages.html}}",
         };
-        const html = template.render_fragment("index.html", params);
+        const html = template.render_fragment("layout.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
 
@@ -83,9 +83,9 @@ async function start_server() {
         const params = {
             client_entry_point: amanifest.main,
             client_css: amanifest.css,
-            main_content_html: "{{> settings.html}}",
+            main_content_html: "{{> pages/settings.html}}",
         };
-        const html = template.render_fragment("index.html", params);
+        const html = template.render_fragment("layout.html", params);
         reply.type("html").send(template.render_loaded_fragment(html));
     });
     

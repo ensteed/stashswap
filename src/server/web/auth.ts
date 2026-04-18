@@ -23,15 +23,15 @@ export type liuser_payload = jwt.JwtPayload & {
 };
 
 export function send_unauthorized_response(reply: FastifyReply) {
-    const login_html = template.render_fragment("login.html", { hidden_class: "hidden" });
-    const index_with_login = template.render_fragment("index.html", { sign_in_fragment: login_html });
+    const login_html = template.render_fragment("partials/login.html", { hidden_class: "hidden" });
+    const index_with_login = template.render_fragment("layout.html", { sign_in_fragment: login_html });
     reply.status(200).type("html").send(index_with_login);
 }
 
 export function create_logged_in_resp(usr: ss_user): string {
     const remove_modal = `<div id="modal-root" hx-swap-oob="true"></div>`;
-    const main_page = `<div id="main-content" hx-swap-oob="true">{{> dashboard.html}}</div>`;
-    const replaced_navbar = `{{> navbar-right-logged-in.html}}`;
+    const main_page = `<div id="main-content" hx-swap-oob="true">{{> pages/dashboard.html}}</div>`;
+    const replaced_navbar = `{{> partials/navbar-right-logged-in.html}}`;
     const html = render_loaded_fragment(remove_modal + main_page + replaced_navbar, {
         first_name: usr.first_name,
         icons_path: amanifest.icons,
@@ -189,7 +189,7 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
 
         const logout = (_request: FastifyRequest, reply: FastifyReply) => {
             clear_user_session(reply);
-            reply.type("html").send(render_fragment("logout.html", { icons_path: amanifest.icons }));
+            reply.type("html").send(render_fragment("partials/logout.html", { icons_path: amanifest.icons }));
         };
 
         const me = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -197,7 +197,7 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
                 ilog("me: user not logged in");
                 reply
                     .type("html")
-                    .send(render_fragment("navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
+                    .send(render_fragment("partials/navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
                 return;
             }
 
@@ -209,7 +209,7 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
 
                 ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
                 reply.type("html").send(
-                    render_fragment("navbar-right-logged-in.html", {
+                    render_fragment("partials/navbar-right-logged-in.html", {
                         first_name: usr.first_name ?? "",
                         icons_path: amanifest.icons,
                     })
