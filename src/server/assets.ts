@@ -5,6 +5,7 @@ interface asset_manifest {
     main: string;
     css: string;
     icons: string;
+    default_profile_pic: string;
 }
 
 interface manifest_entry {
@@ -14,7 +15,7 @@ interface manifest_entry {
 }
 
 function load_asset_manifest() {
-    const amanifest: asset_manifest = {main: "", css: "", icons: ""};
+    const amanifest: asset_manifest = { main: "", css: "", icons: "", default_profile_pic: "" };
     const manifest = JSON.parse(readFileSync("public/.vite/manifest.json", "utf8"));
     for (const [key, value] of Object.entries(manifest) as [string, manifest_entry][]) {
         const nm = path.basename(key);
@@ -25,6 +26,8 @@ function load_asset_manifest() {
             }
         } else if (nm === "icons.svg") {
             amanifest.icons = value.file;
+        } else if (nm === "default.png") {
+            amanifest.default_profile_pic = value.file;
         } else {
             throw new Error(`Unknown asset in manifest: ${nm}`);
         }

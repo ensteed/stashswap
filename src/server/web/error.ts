@@ -23,5 +23,5 @@ export function create_err_resp(err: Error | string) {
         message: typeof err === "string" ? err : err.message,
     };
     ilog(errc);
-    return template.render_view("partials/errmsg.html", { msg: errc.message })
+    return template.render_partial("errmsg", { msg: errc.message });
 }

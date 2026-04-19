@@ -39,12 +39,12 @@ async function start_server() {
     });
 
     fastify.get("/", async (_request, reply) => {
-        const html = template.render_full_page("landing");
+        const html = template.render_page_layout("landing");
         reply.type("html").send(html);
     });
 
     fastify.get("/orders", async (_request, reply) => {
-        reply.type("html").send(template.render_full_page("orders"));
+        reply.type("html").send(template.render_page_layout("orders"));
     });
 
     // TODO: This needs to move to web/dashboard (pretty much all of these need to move to their own handling thing)
@@ -62,15 +62,15 @@ async function start_server() {
         } catch (err: any) {
             throw make_http_error("Problem with db query: " + err.message, 500);
         }
-        reply.type("html").send(template.render_full_page("dashboard", {first_name: name}));
+        reply.type("html").send(template.render_page_layout("dashboard", {first_name: name}));
     });
 
     fastify.get("/messages", async (_request, reply) => {
-        reply.type("html").send(template.render_full_page("messages"));
+        reply.type("html").send(template.render_page_layout("messages"));
     });
 
     fastify.get("/settings", async (_request, reply) => {
-        reply.type("html").send(template.render_full_page("settings"));
+        reply.type("html").send(template.render_page_layout("settings"));
     });
 
     fastify.get("/test-email", async (_request, _reply) => {

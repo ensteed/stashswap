@@ -5,11 +5,11 @@ import sharp from "sharp";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 import { config } from "../config.js";
-import { render_view } from "../template.js";
+import template from "../template.js";
 import { verify_liuser, clear_user_session, type liuser_payload } from "./auth.js";
 import type { ss_user } from "./users.js";
 import { make_http_error, is_http_error } from "./error.js";
-import {amanifest} from "../assets.js";
+import { amanifest } from "../assets.js";
 
 const s3 = new S3Client({ region: config.aws.s3_region });
 
@@ -27,7 +27,11 @@ async function sanitize_profile_pic(file_buffer: Buffer) {
     }
 }
 
-async function update_user(user_id: string, update_op: UpdateFilter<ss_user>, users: Collection<ss_user>): Promise<UpdateResult> {
+async function update_user(
+    user_id: string,
+    update_op: UpdateFilter<ss_user>,
+    users: Collection<ss_user>
+): Promise<UpdateResult> {
     try {
         return await users.updateOne({ _id: user_id }, update_op);
     } catch (err: any) {
@@ -97,27 +101,20 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
         const edit_profile = async (request: FastifyRequest, reply: FastifyReply) => {
             const liusr = request.liuser as liuser_payload;
             const usr = await get_logged_in_user(liusr.id, users);
-
             if (!usr) {
                 wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
                 clear_user_session(reply);
-                reply.type("html").send(render_view("partials/logout.html", {icons_path: amanifest.icons}));
+                reply.header("HX-Redirect", "/login");
+                reply.type("html").send("");
                 return;
             }
 
-            const html_txt = render_view("pages/edit-profile.html", {
-                pfp_s3_key: usr.profile?.pfp_s3_key ?? "profile_pics/default.png",
-                public_name: usr.profile?.public_name ?? usr.first_name,
-                profile_about: usr.profile?.about,
+            const index_html = template.render_page_layout("edit-profile", {
+                pfp_s3_key: usr.profile.pfp_s3_key,
+                public_name: usr.profile.public_name,
+                profile_about: usr.profile.about,
+                default_pfp: amanifest.default_profile_pic,
             });
-
-            const params = {
-                client_entry_point: amanifest.main,
-                client_css: amanifest.css,
-                main_content_html: html_txt,
-            };
-            
-            const index_html = render_view("layout.html", params);
             reply.type("html").send(index_html);
         };
 
@@ -149,7 +146,8 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
                 } else if (result.acknowledged) {
                     wlog(`User ${usr.id} not found in db - likely removed while logged in`);
                     clear_user_session(reply);
-                    reply.type("html").send(render_view("partials/logout.html", {icons_path: amanifest.icons}));
+                    reply.header("HX-Redirect", "/login");
+                    reply.type("html").send("");
                 } else {
                     throw make_http_error("Database update failed", 500);
                 }
@@ -183,7 +181,8 @@ export function create_profile_routes(mongo_client: MongoClient): FastifyPluginA
             } else if (result.acknowledged) {
                 wlog(`User ${usr.id} not found in db - likely removed while logged in`);
                 clear_user_session(reply);
-                reply.type("html").send(render_view("partials/logout.html", {icons_path: amanifest.icons}));
+                reply.header("HX-Redirect", "/login");
+                reply.type("html").send("");
             } else {
                 throw make_http_error("Database update failed", 500);
             }

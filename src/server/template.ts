@@ -96,7 +96,7 @@ const template = {
     render_layout: render_layout,
     render_page: render_page,
     render_partial: render_partial,
-    render_full_page: render_page_layout,
+    render_page_layout: render_page_layout,
 };
 
 export default template;

@@ -22,12 +22,6 @@ export type liuser_payload = jwt.JwtPayload & {
     id: string;
 };
 
-export function send_unauthorized_response(reply: FastifyReply) {
-    const login_html = template.render_partial("login", { hidden_class: "hidden" });
-    const index_with_login = template.render_view("layout.html", { sign_in_fragment: login_html });
-    reply.status(200).type("html").send(index_with_login);
-}
-
 async function verify_token(token: string) {
     return new Promise<liuser_payload>((resolve, reject) => {
         jwt.verify(
@@ -115,7 +109,7 @@ export async function create_user_session(reply: FastifyReply, user_id: string) 
 
 export async function verify_liuser(request: FastifyRequest, reply: FastifyReply) {
     if (!request.cookies["token"]) {
-        send_unauthorized_response(reply);
+        reply.redirect("/login");
         return;
     }
     try {
@@ -180,7 +174,7 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
 
         const logout = (_request: FastifyRequest, reply: FastifyReply) => {
             clear_user_session(reply);
-            reply.type("html").send(template.render_full_page("landing"));
+            reply.redirect("/");
         };
 
         const me = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -222,7 +216,7 @@ export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsyn
                 reply.type("html").send(login_html);
             }
             else {
-                const html = template.render_full_page("landing", {}, "layout", { modal_root_content: login_html });
+                const html = template.render_page_layout("landing", {}, "main", { modal_root_content: login_html });
                 reply.type("html").send(html);
             }
         }

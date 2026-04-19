@@ -1,7 +1,7 @@
 <!-- This sep class does nothing visually it is just so the in between space is ignored when clicking the menu (so it doesn't close) -->
 <ul class="sep">
   <li>
-    <a href="/profile">
+    <a href="/profile" class="dropdown-menu-item">
       <svg class="dropdown-menu-item-icon">
         <use href="{{icons_path}}#profile"></use>
       </svg>
@@ -9,7 +9,7 @@
     </a>
   </li>
   <li>
-    <a href="/orders">
+    <a href="/orders" class="dropdown-menu-item">
       <svg class="dropdown-menu-item-icon">
         <use href="{{icons_path}}#orders"></use>
       </svg>
@@ -17,7 +17,7 @@
     </a>
   </li>
   <li>
-    <a href="/messages">
+    <a href="/messages" class="dropdown-menu-item">
       <svg class="dropdown-menu-item-icon">
         <use href="{{icons_path}}#messages"></use>
       </svg>
@@ -28,7 +28,7 @@
     <div class="sep"></div>
   </li>
   <li id="itsme">
-    <a href="/settings">
+    <a href="/settings" class="dropdown-menu-item">
       <svg class="dropdown-menu-item-icon">
         <use href="{{icons_path}}#settings"></use>
       </svg>
@@ -36,11 +36,13 @@
     </a>
   </li>
   <li>
-    <a hx-post="/logout">
-      <svg class="dropdown-menu-item-icon">
-        <use href="{{icons_path}}#sign-out"></use>
-      </svg>
-      Sign Out
-    </a>
+    <form action="/logout" method="post">
+      <button type="submit" class="dropdown-menu-item">
+        <svg class="dropdown-menu-item-icon">
+          <use href="{{icons_path}}#sign-out"></use>
+        </svg>
+        Sign Out
+      </button>
+    </form>
   </li>
 </ul>
