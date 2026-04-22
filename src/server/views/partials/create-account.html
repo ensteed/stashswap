@@ -1,7 +1,7 @@
 <dialog id="create-account-modal" class="create-account-modal">
   <header>
     <h2>Create your account</h2>
-    <button id="btn-create-account-modal-close" class="base auto-raise">X</button>
+    <button id="btn-create-account-modal-close" class="btn btn-auto-raise">X</button>
   </header>
   <div class="body">
     <form hx-post="/create-account" hx-target="#create-account-modal-errors" hx-swap="innerHTML" hx-indicator="#btn-create-account-modal-submit">
@@ -23,7 +23,7 @@
         <input id="create-account-modal-name" type="text" name="name" autocomplete="name">
       </div>
       <div class="actions">
-        <button id="btn-create-account-modal-submit" type="submit" class="base primary">
+        <button id="btn-create-account-modal-submit" type="submit" class="btn btn-primary">
           <span id="btn-create-account-modal-text">Sign in</span>
           <span id="btn-create-account-modal-spinner" class="spinner"></span>
         </button>

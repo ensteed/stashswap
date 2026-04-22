@@ -1,5 +1,4 @@
-button.base,
-.btn-base {
+.btn {
     padding: 0.5rem 0.9rem;
     margin: 0 0.5rem;
     border: 1px solid var(--color-borders);
@@ -10,34 +9,31 @@ button.base,
     background-color: transparent;
     color: var(--color-text);
     min-width: 6rem;
+    text-decoration: none;
 }
 
-button.base:hover,
-.btn-base:hover {
+.btn:hover {
     border: 1px solid var(--color-primary);
     color: var(--color-primary);
 }
 
-button.primary,
 .btn-primary {
     border: none;
     background-color: var(--color-primary);
     color: var(--color-neutral);
 }
 
-button.primary:hover,
 .btn-primary:hover {
     border: none;
     background-color: var(--color-primary-darker);
     color: var(--color-neutral);
 }
 
-button.account-menu {
+.btn-account-menu {
     position: relative;
     padding-right: 1.6rem;
 }
 
-button.auto-raise,
 .btn-auto-raise {
     min-width: fit-content;
     padding: 0.5rem 0.75rem;
@@ -47,7 +43,6 @@ button.auto-raise,
     color: var(--color-text);
 }
 
-button.auto-raise:hover,
 .btn-auto-raise:hover {
     background-color: var(--color-primary);
     color: var(--color-neutral);

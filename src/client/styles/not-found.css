@@ -5,8 +5,7 @@
     padding: 2rem;
     background:
         radial-gradient(circle at top right, rgba(129, 178, 154, 0.28), transparent 30%),
-        radial-gradient(circle at bottom left, rgba(224, 122, 95, 0.15), transparent 35%),
-        linear-gradient(180deg, #fffaf2 0%, #fdfbf7 35%, #f6f1e9 100%);
+        radial-gradient(circle at bottom left, rgba(224, 122, 95, 0.15), transparent 35%)
 }
 
 .not-found-card {

@@ -11,6 +11,8 @@ import template from "./template.js";
 import { create_auth_routes, verify_liuser, type liuser_payload } from "./web/auth.js";
 import { create_profile_routes } from "./web/profile.js";
 import { create_user_routes, type ss_user } from "./web/users.js";
+import { create_listing_routes } from "./web/listings.js";
+
 import * as emapi from "./services/email.js";
 import { is_http_error, create_err_resp, make_http_error } from "./web/error.js";
 import { config } from "./config.js";
@@ -86,6 +88,7 @@ async function start_server() {
     fastify.register(create_profile_routes(mdb_client));
     fastify.register(create_auth_routes(mdb_client));
     fastify.register(create_user_routes(mdb_client));
+    fastify.register(create_listing_routes(mdb_client));
 
     fastify.setErrorHandler((err: any, _request, reply) => {
         if (is_http_error(err)) {

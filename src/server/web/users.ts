@@ -30,21 +30,10 @@ export interface ss_user_seller {
     stripe_payouts_enabled: boolean;
 }
 
-const DEFAULT_PROFILE: ss_user_profile = {
-    pfp_s3_key: "",
-    about: "",
-    public_name: "",
-};
-
-const DEFAULT_SELLER: ss_user_seller = {
-    stripe_account_id: "",
-    stripe_onboarding_complete: false,
-    stripe_charges_enabled: false,
-    stripe_payouts_enabled: false,
-};
-
 export interface ss_user {
     _id: string;
+    created_at: Date;
+    updated_at: Date;
     username: string;
     first_name: string;
     last_name: string;
@@ -55,17 +44,30 @@ export interface ss_user {
     seller: ss_user_seller;
 }
 
-const DEFAULT_USER: ss_user = {
-    _id: "",
-    username: "",
-    first_name: "",
-    last_name: "",
-    email: "",
-    pwd: "",
-    profile: DEFAULT_PROFILE,
-    addresses: [],
-    seller: DEFAULT_SELLER,
-};
+function create_default_user(): ss_user {
+    return {
+        _id: new ObjectId().toString(),
+        created_at: new Date(),
+        updated_at: new Date(),
+        username: "",
+        first_name: "",
+        last_name: "",
+        email: "",
+        pwd: "",
+        profile: {
+            pfp_s3_key: "",
+            about: "",
+            public_name: "",
+        },
+        addresses: [],
+        seller: {
+            stripe_account_id: "",
+            stripe_onboarding_complete: false,
+            stripe_charges_enabled: false,
+            stripe_payouts_enabled: false,
+        }
+    };
+}
 
 // - At least one lowercase letter (=(?=.*[a-z])=)
 // - At least one uppercase letter (=(?=.*[A-Z])=)
@@ -75,13 +77,6 @@ const DEFAULT_USER: ss_user = {
 //const password_regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
 const password_regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&])[A-Za-z\d!@#$%^&]{8,}$/;
 const username_regex = /^(?=.{3,}$)(?!.*[_-]{2,})(?![_-])(?!.*[_-]$)[\w-]*$/;
-
-interface error_info {
-    code: number;
-    message: string;
-}
-
-type create_user_callback = (new_user: ss_user | null, error: error_info | null) => void;
 
 function format_user_first_last_name(usr: ss_user) {
     let trimmed_name = usr.first_name.trim();
@@ -114,7 +109,6 @@ async function insert_user(new_user: ss_user, users: Collection<ss_user>): Promi
 }
 
 async function hash_password_and_create_user(new_user: ss_user, users: Collection<ss_user>): Promise<void> {
-    new_user._id = new ObjectId().toString();
     format_user_first_last_name(new_user);
     new_user.pwd = await do_hash(new_user.pwd);
     const usr_result = await insert_user(new_user, users);
@@ -157,7 +151,7 @@ export function create_user_routes(mongo_client: MongoClient): FastifyPluginAsyn
 
         async function handle_create_user_and_login(request: FastifyRequest, reply: FastifyReply) {
             const body = request.body as Record<string, string>;
-            const new_user = { ...DEFAULT_USER, ...body };
+            const new_user = {...create_default_user(), ...body };
             new_user.first_name = body["name"] ?? "";
             new_user.last_name = "";
             try {

@@ -1,7 +1,7 @@
 <dialog id="login-modal" class="login-modal">
   <header>
     <h2>Sign in to your account</h2>
-    <button id="btn-login-modal-close" class="base auto-raise {{hidden_class}}">X</button>
+    <button id="btn-login-modal-close" class="btn btn-auto-raise {{hidden_class}}">X</button>
   </header>
   <div class="body">
     <form hx-post="login" hx-target="#login-errors" hx-swap="innerHTML" hx-indicator="#btn-login-submit">
@@ -15,7 +15,7 @@
         <input id="login-modal-password" type="password" name="pwd" autocomplete="current-password" required>
       </div>
       <div class="actions">
-        <button id="btn-login-submit" type="submit" class="base primary">
+        <button id="btn-login-submit" type="submit" class="btn btn-primary">
           <span id="btn-login-submit-text">Sign in</span>
           <span id="btn-login-submit-spinner" class="spinner"></span>
         </button>
