@@ -107,7 +107,7 @@ export function create_listing_routes(mongo_client: MongoClient): FastifyPluginA
         const db = mongo_client.db(config.mongo.db);
         const listings = db.collection<ss_listing>(config.mongo.listings);
 
-        const get_draft_listing_view = async (
+        const get_edit_listing_view = async (
             request: FastifyRequest<{ Params: { id: string } }>,
             reply: FastifyReply
         ) => {
@@ -123,14 +123,14 @@ export function create_listing_routes(mongo_client: MongoClient): FastifyPluginA
             const usr = request.liuser as liuser_payload;
             const draft_listing = create_default_listing(usr.id);
             await insert_listing(draft_listing, listings);
-            reply.redirect(`/listings/${draft_listing._id}`);
+            reply.redirect(`/listings/${draft_listing._id}/edit`);
         };
 
-        fastify.post("/listings/new", { preHandler: verify_liuser }, create_listing_draft);
+        fastify.post("/listings", { preHandler: verify_liuser }, create_listing_draft);
         fastify.get<{ Params: { id: string } }>(
-            "/listings/:id",
+            "/listings/:id/edit",
             { preHandler: verify_liuser, schema: GET_DRAFT_SCHEMA },
-            get_draft_listing_view
+            get_edit_listing_view
         );
     };
 }
