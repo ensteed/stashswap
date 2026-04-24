@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { MongoClient, Collection } from "mongodb";
+import { Collection } from "mongodb";
 import bc from "bcrypt";
 import jwt from "jsonwebtoken";
-
+import mongo from "../db.js";
 import template from "../template.js";
 import { rethrow_http_error, make_http_error, create_err_resp } from "./error.js";
-import type { ss_user } from "./users.js";
+import { type ss_user } from "../models/ss_user.js";
 import { amanifest } from "../assets.js";
 import { config } from "../config.js";
 
@@ -137,93 +137,91 @@ async function create_fake_login_timeout(usr: ss_user): Promise<void> {
     });
 }
 
-export function create_auth_routes(mongo_client: MongoClient): FastifyPluginAsync {
-    return async (fastify: FastifyInstance) => {
-        const db = mongo_client.db(config.mongo.db);
-        const users = db.collection<ss_user>(config.mongo.users);
-
-        // login returns an error html message if fails, and returns swaps for success.
-        const login = async (request: FastifyRequest, reply: FastifyReply) => {
-            try {
-                const body = request.body as { email: string; pwd: string };
-                const { email, pwd: plain_text_pwd } = body;
-                if (!email || !plain_text_pwd) {
-                    throw new Error("Username and password are required");
-                }
-
-                const usr = await get_user_from_email(email, users);
-                if (!usr) {
-                    throw new Error("User not found");
-                }
-
-                const match = await compare_password(plain_text_pwd, usr.pwd);
-                if (!match) {
-                    throw new Error("Incorrect password");
-                }
-
-                await create_user_session(reply, usr._id);
-                ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
-                await create_fake_login_timeout(usr);
-                reply.header("HX-Redirect", "/dashboard");
-                reply.type("html").send("");
-            } catch (err: any) {
-                rethrow_http_error(err);
-                reply.type("html").send(create_err_resp(err));
-            }
-        };
-
-        const logout = (_request: FastifyRequest, reply: FastifyReply) => {
-            clear_user_session(reply);
-            reply.redirect("/");
-        };
-
-        const me = async (request: FastifyRequest, reply: FastifyReply) => {
-            if (!request.headers["hx-request"]) {
-                reply.redirect("/");
-                return;
-            }
-            
-            if (!request.liuser) {
-                ilog("me: user not logged in");
-                reply
-                    .type("html")
-                    .send(template.render_partial("navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
-                return;
-            }
-
-            try {
-                const usr = await get_user_from_id(request.liuser.id, users);
-                if (!usr) {
-                    throw new Error(`User with id ${request.liuser.id} not found in database`);
-                }
-                
-                ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
-                reply.type("html").send(
-                    template.render_partial("navbar-right-logged-in", {
-                        first_name: usr.first_name ?? "",
-                        icons_path: amanifest.icons,
-                    })
-                );
-            } catch (err: any) {
-                rethrow_http_error(err);
-                reply.type("html").send(create_err_resp(err));
-            }
-        };
-
-        const get_login_page = (request: FastifyRequest, reply: FastifyReply) => {
-            const login_html = template.render_partial("login");
-            if (request.headers["hx-request"]) {
-                reply.type("html").send(login_html);
-            }
-            else {
-                const html = template.render_page_layout("landing", {}, "main", { modal_root_content: login_html });
-                reply.type("html").send(html);
-            }
+// login returns an error html message if fails, and returns swaps for success.
+async function handle_post_login(request: FastifyRequest, reply: FastifyReply) {
+    const users = mongo.get_users();
+    try {
+        const body = request.body as { email: string; pwd: string };
+        const { email, pwd: plain_text_pwd } = body;
+        if (!email || !plain_text_pwd) {
+            throw new Error("Username and password are required");
         }
 
-        fastify.get("/login", get_login_page);
-        fastify.post("/login", login);
-        fastify.post("/logout", logout);
-        fastify.get("/me", { preHandler: maybe_liuser }, me);
+        const usr = await get_user_from_email(email, users);
+        if (!usr) {
+            throw new Error("User not found");
+        }
+
+        const match = await compare_password(plain_text_pwd, usr.pwd);
+        if (!match) {
+            throw new Error("Incorrect password");
+        }
+
+        await create_user_session(reply, usr._id);
+        ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
+        await create_fake_login_timeout(usr);
+        reply.header("HX-Redirect", "/dashboard");
+        reply.type("html").send("");
+    } catch (err: any) {
+        rethrow_http_error(err);
+        reply.type("html").send(create_err_resp(err));
+    }
+}
+
+function handle_post_logout(_request: FastifyRequest, reply: FastifyReply) {
+    clear_user_session(reply);
+    reply.redirect("/");
+}
+
+function handle_get_login(request: FastifyRequest, reply: FastifyReply) {
+    const login_html = template.render_partial("login");
+    if (request.headers["hx-request"]) {
+        reply.type("html").send(login_html);
+    } else {
+        const html = template.render_page_layout("landing", {}, "main", { modal_root_content: login_html });
+        reply.type("html").send(html);
+    }
+}
+
+async function handle_get_me(request: FastifyRequest, reply: FastifyReply) {
+    const users = mongo.get_users();
+    if (!request.headers["hx-request"]) {
+        reply.redirect("/");
+        return;
+    }
+
+    if (!request.liuser) {
+        ilog("me: user not logged in");
+        reply
+            .type("html")
+            .send(template.render_partial("navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
+        return;
+    }
+
+    try {
+        const usr = await get_user_from_id(request.liuser.id, users);
+        if (!usr) {
+            throw new Error(`User with id ${request.liuser.id} not found in database`);
+        }
+
+        ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
+        reply.type("html").send(
+            template.render_partial("navbar-right-logged-in", {
+                first_name: usr.first_name ?? "",
+                icons_path: amanifest.icons,
+            })
+        );
+    } catch (err: any) {
+        rethrow_http_error(err);
+        reply.type("html").send(create_err_resp(err));
+    }
+}
+
+export function create_auth_routes(): FastifyPluginAsync {
+    return async (fastify: FastifyInstance) => {
+        fastify.get("/login", handle_get_login);
+        fastify.post("/login", handle_post_login);
+        fastify.post("/logout", handle_post_logout);
+        fastify.get("/me", { preHandler: maybe_liuser }, handle_get_me);
     };
 }

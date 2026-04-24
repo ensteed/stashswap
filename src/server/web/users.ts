@@ -1,48 +1,11 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { MongoClient, ObjectId, Collection, type InsertOneResult } from "mongodb";
+import { ObjectId, Collection, type InsertOneResult } from "mongodb";
 import bc from "bcrypt";
 import { create_err_resp, rethrow_http_error, make_http_error } from "./error.js";
 import { create_user_session } from "./auth.js";
-import { config } from "../config.js";
+import { type ss_user } from "../models/ss_user.js";
 import template from "../template.js";
-
-export interface ss_user_profile {
-    pfp_s3_key: string;
-    about: string;
-    public_name: string;
-}
-
-export interface ss_user_address {
-    id: string;
-    street: string;
-    street2: string;
-    city: string;
-    state: string;
-    zip: string;
-    country: string;
-    is_default: boolean;
-}
-
-export interface ss_user_seller {
-    stripe_account_id: string;
-    stripe_onboarding_complete: boolean;
-    stripe_charges_enabled: boolean;
-    stripe_payouts_enabled: boolean;
-}
-
-export interface ss_user {
-    _id: string;
-    created_at: Date;
-    updated_at: Date;
-    username: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    pwd: string;
-    profile: ss_user_profile;
-    addresses: ss_user_address[];
-    seller: ss_user_seller;
-}
+import mongo from "../db.js";
 
 function create_default_user(): ss_user {
     return {
@@ -65,7 +28,7 @@ function create_default_user(): ss_user {
             stripe_onboarding_complete: false,
             stripe_charges_enabled: false,
             stripe_payouts_enabled: false,
-        }
+        },
     };
 }
 
@@ -144,28 +107,26 @@ async function create_user(new_user: ss_user, users: Collection<ss_user>): Promi
     hash_password_and_create_user(new_user, users);
 }
 
-export function create_user_routes(mongo_client: MongoClient): FastifyPluginAsync {
+async function handle_post_create_account(request: FastifyRequest, reply: FastifyReply) {
+    const users = mongo.get_users();
+    const body = request.body as Record<string, string>;
+    const new_user = { ...create_default_user(), ...body };
+    new_user.first_name = body["name"] ?? "";
+    new_user.last_name = "";
+    try {
+        await create_user(new_user, users);
+        await create_user_session(reply, new_user._id);
+        reply.header("HX-Redirect", "/dashboard");
+        reply.type("html").send("");
+    } catch (err: any) {
+        rethrow_http_error(err);
+        reply.type("html").send(create_err_resp(err));
+    }
+}
+
+export function create_user_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
-        const db = mongo_client.db(config.mongo.db);
-        const users = db.collection<ss_user>(config.mongo.users);
-
-        async function handle_create_user_and_login(request: FastifyRequest, reply: FastifyReply) {
-            const body = request.body as Record<string, string>;
-            const new_user = {...create_default_user(), ...body };
-            new_user.first_name = body["name"] ?? "";
-            new_user.last_name = "";
-            try {
-                await create_user(new_user, users);
-                await create_user_session(reply, new_user._id);
-                reply.header("HX-Redirect", "/dashboard");
-                reply.type("html").send("");
-            } catch (err: any) {
-                rethrow_http_error(err);
-                reply.type("html").send(create_err_resp(err));
-            }
-        }
-
-        fastify.post("/create-account", handle_create_user_and_login);
+        fastify.post("/create-account", handle_post_create_account);
         fastify.get("/create-account", (_request, reply) => {
             reply.type("html").send(template.render_partial("create-account"));
         });
