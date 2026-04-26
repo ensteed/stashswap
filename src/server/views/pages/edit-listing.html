@@ -1,1 +1,251 @@
-<h2>Edit {{listing_name}}!</h2>
+<div class="edit-listing-page">
+  <!-- Header -->
+  <div class="header-section">
+    <div>
+      <h1>Editing Listing</h1>
+      <p>List yarn, fiber, tools, or patterns from your stash.</p>
+    </div>
+    <a href="#" class="btn">Back to Dashboard</a>
+  </div>
+
+  <!-- Step 1: Photos -->
+  <section class="section-panel">
+    <h2 class="title"><span class="step-num">1</span> Photos</h2>
+    <div class="photos">
+      <div class="drop-area">
+        <span class="drop-icon">📷</span>
+        <strong>Drag &amp; drop photos here</strong>
+        <p>or click to browse · JPG, PNG, WEBP · up to 10 photos · 10 MB each</p>
+      </div>
+      <div class="photo-thumbs">
+        {{photo_thumb_section}}
+      </div>
+      <p class="photo-hint">First photo is the cover image. Drag to reorder. Good lighting sells listings — natural
+        light
+        works best.</p>
+    </div>
+  </section>
+
+  <!-- Step 2: Yarn Details -->
+  <!-- <section class="panel"> -->
+  <!--   <h2 class="panel-title"> -->
+  <!--     <span class="step">2</span> Yarn Details -->
+  <!--   </h2> -->
+  <!--   <div class="form-grid"> -->
+  <!--     <div class="field full"> -->
+  <!--       <label for="title">Listing title</label> -->
+  <!--       <input id="title" type="text" placeholder="e.g. Madelinetosh Tosh Sock – Scarlet (2 skeins)"> -->
+  <!--     </div> -->
+
+  <!--     <div class="field"> -->
+  <!--       <label for="brand">Brand</label> -->
+  <!--       <input id="brand" type="text" placeholder="e.g. Madelinetosh"> -->
+  <!--     </div> -->
+
+  <!--     <div class="field"> -->
+  <!--       <label for="yarn-line">Yarn line</label> -->
+  <!--       <input id="yarn-line" type="text" placeholder="e.g. Tosh Sock"> -->
+  <!--     </div> -->
+
+  <!--     <div class="field"> -->
+  <!--       <label for="colorway">Colorway</label> -->
+  <!--       <input id="colorway" type="text" placeholder="e.g. Scarlet"> -->
+  <!--     </div> -->
+
+  <!--     <div class="field"> -->
+  <!--       <label for="weight">Weight</label> -->
+  <!--       <select id="weight"> -->
+  <!--         <option value="" disabled selected>Select weight…</option> -->
+  <!--         <option>Lace (0)</option> -->
+  <!--         <option>Fingering (1)</option> -->
+  <!--         <option>Sport (2)</option> -->
+  <!--         <option>DK (3)</option> -->
+  <!--         <option>Worsted (4)</option> -->
+  <!--         <option>Bulky (5)</option> -->
+  <!--         <option>Super Bulky (6)</option> -->
+  <!--         <option>Jumbo (7)</option> -->
+  <!--         <option>Other / unknown</option> -->
+  <!--       </select> -->
+  <!--     </div> -->
+
+  <!--     <div class="field full"> -->
+  <!--       <label for="fiber">Fiber content</label> -->
+  <!--       <input id="fiber" type="text" placeholder="e.g. 100% Superwash Merino"> -->
+  <!--     </div> -->
+  <!--   </div> -->
+
+  <!--   <div class="section-divider"></div> -->
+
+  <!--   <div class="three-col"> -->
+  <!--     <div class="field"> -->
+  <!--       <label for="yardage">Yardage <span class="hint">per skein</span></label> -->
+  <!--       <input id="yardage" type="number" min="0" placeholder="e.g. 395"> -->
+  <!--     </div> -->
+  <!--     <div class="field"> -->
+  <!--       <label for="grams">Grams <span class="hint">per skein</span></label> -->
+  <!--       <input id="grams" type="number" min="0" placeholder="e.g. 100"> -->
+  <!--     </div> -->
+  <!--     <div class="field"> -->
+  <!--       <label for="dye-lot">Dye lot</label> -->
+  <!--       <input id="dye-lot" type="text" placeholder="e.g. Same lot"> -->
+  <!--     </div> -->
+  <!--   </div> -->
+  <!-- </section> -->
+
+  <!-- Step 3: Condition & Quantity -->
+  <!-- <section class="panel"> -->
+  <!--   <h2 class="panel-title"> -->
+  <!--     <span class="step">3</span> Condition &amp; Quantity -->
+  <!--   </h2> -->
+  <!--   <div class="form-grid"> -->
+  <!--     <div class="field"> -->
+  <!--       <label for="condition">Condition</label> -->
+  <!--       <select id="condition"> -->
+  <!--         <option value="" disabled selected>Select condition…</option> -->
+  <!--         <option>New / Never wound</option> -->
+  <!--         <option>New / Wound into cake</option> -->
+  <!--         <option>Lightly used (swatched)</option> -->
+  <!--         <option>Partial skein</option> -->
+  <!--       </select> -->
+  <!--     </div> -->
+
+  <!--     <div class="field"> -->
+  <!--       <label for="home-env">Home environment</label> -->
+  <!--       <select id="home-env"> -->
+  <!--         <option value="" disabled selected>Select…</option> -->
+  <!--         <option>Smoke-free, pet-free</option> -->
+  <!--         <option>Smoke-free, pet-friendly</option> -->
+  <!--         <option>Not specified</option> -->
+  <!--       </select> -->
+  <!--     </div> -->
+
+  <!--     <div class="field"> -->
+  <!--       <label for="quantity">Quantity (skeins)</label> -->
+  <!--       <input id="quantity" type="number" min="1" value="1"> -->
+  <!--     </div> -->
+
+  <!--     <div class="field"> -->
+  <!--       <label for="category">Category</label> -->
+  <!--       <select id="category"> -->
+  <!--         <option value="" disabled selected>Select…</option> -->
+  <!--         <option>Yarn</option> -->
+  <!--         <option>Fiber / Roving</option> -->
+  <!--         <option>Needles &amp; Hooks</option> -->
+  <!--         <option>Patterns</option> -->
+  <!--         <option>Notions</option> -->
+  <!--         <option>Kits</option> -->
+  <!--       </select> -->
+  <!--     </div> -->
+  <!--   </div> -->
+  <!-- </section> -->
+
+  <!-- Step 4: Pricing & Shipping -->
+  <!-- <section class="panel"> -->
+  <!--   <h2 class="panel-title"> -->
+  <!--     <span class="step">4</span> Pricing &amp; Shipping -->
+  <!--   </h2> -->
+  <!--   <div class="price-fields"> -->
+  <!--     <div class="field"> -->
+  <!--       <label for="price">Price <span class="hint">per skein</span></label> -->
+  <!--       <div class="input-prefix"> -->
+  <!--         <span>$</span> -->
+  <!--         <input id="price" type="number" min="0" step="0.01" placeholder="0.00"> -->
+  <!--       </div> -->
+  <!--     </div> -->
+  <!--     <div class="field"> -->
+  <!--       <label for="shipping-cost">Shipping cost</label> -->
+  <!--       <div class="input-prefix"> -->
+  <!--         <span>$</span> -->
+  <!--         <input id="shipping-cost" type="number" min="0" step="0.01" placeholder="0.00"> -->
+  <!--       </div> -->
+  <!--     </div> -->
+  <!--     <div class="field"> -->
+  <!--       <label for="processing-time">Processing time</label> -->
+  <!--       <select id="processing-time"> -->
+  <!--         <option>1 business day</option> -->
+  <!--         <option selected>2 business days</option> -->
+  <!--         <option>3–5 business days</option> -->
+  <!--         <option>1 week</option> -->
+  <!--       </select> -->
+  <!--     </div> -->
+  <!--   </div> -->
+
+  <!--   <div class="section-divider"></div> -->
+
+  <!--   <p style="margin:0 0 0.75rem; font-size:0.9rem; font-weight:700;">Ships via</p> -->
+  <!--   <div class="radio-group"> -->
+  <!--     <label class="radio-option"> -->
+  <!--       <input type="radio" name="shipping-method" value="usps-fc" checked> -->
+  <!--       <div> -->
+  <!--         <span class="label-text">USPS First Class</span> -->
+  <!--         <span class="label-sub">Best for 1–2 skeins under 13 oz</span> -->
+  <!--       </div> -->
+  <!--     </label> -->
+  <!--     <label class="radio-option"> -->
+  <!--       <input type="radio" name="shipping-method" value="usps-priority"> -->
+  <!--       <div> -->
+  <!--         <span class="label-text">USPS Priority Mail</span> -->
+  <!--         <span class="label-sub">Flat rate or weight-based, 1–3 days</span> -->
+  <!--       </div> -->
+  <!--     </label> -->
+  <!--     <label class="radio-option"> -->
+  <!--       <input type="radio" name="shipping-method" value="other"> -->
+  <!--       <div> -->
+  <!--         <span class="label-text">Other / buyers choice</span> -->
+  <!--         <span class="label-sub">Describe in your notes</span> -->
+  <!--       </div> -->
+  <!--     </label> -->
+  <!--   </div> -->
+  <!-- </section> -->
+
+  <!-- Step 5: Description & Tags -->
+  <!-- <section class="panel"> -->
+  <!--   <h2 class="panel-title"> -->
+  <!--     <span class="step">5</span> Description &amp; Tags -->
+  <!--   </h2> -->
+  <!--   <div class="form-grid"> -->
+  <!--     <div class="field full"> -->
+  <!--       <label for="description">Seller notes</label> -->
+  <!--       <textarea id="description" -->
+  <!--         placeholder="Describe the yarn's history, storage, how much has been used, dye lot details, and anything a buyer would want to know…"></textarea> -->
+  <!--     </div> -->
+
+  <!--     <div class="field full"> -->
+  <!--       <label>Tags <span class="hint">press Enter or comma to add</span></label> -->
+  <!--       <div class="tag-input-wrap"> -->
+  <!--         <span class="tag-pill">Merino <button>✕</button></span> -->
+  <!--         <span class="tag-pill">Sock Yarn <button>✕</button></span> -->
+  <!--         <span class="tag-pill">Semi-Solid <button>✕</button></span> -->
+  <!--         <input type="text" placeholder="Add a tag…"> -->
+  <!--       </div> -->
+  <!--     </div> -->
+
+  <!--     <div class="field full"> -->
+  <!--       <label for="trades">Trades</label> -->
+  <!--       <select id="trades"> -->
+  <!--         <option>Not accepted</option> -->
+  <!--         <option selected>Maybe — message me</option> -->
+  <!--         <option>Accepted</option> -->
+  <!--       </select> -->
+  <!--     </div> -->
+  <!--   </div> -->
+  <!-- </section> -->
+
+  <!-- Listing preview strip -->
+  <!-- <div class="preview-strip"> -->
+  <!--   <div class="preview-thumb"></div> -->
+  <!--   <div class="preview-info"> -->
+  <!--     <div class="preview-title">Madelinetosh Tosh Sock – Scarlet (2 skeins)</div> -->
+  <!--     <div class="preview-meta">Fingering · 100% Superwash Merino · Lightly used · Smoke-free, pet-free</div> -->
+  <!--   </div> -->
+  <!--   <div class="preview-price">$18<span style="font-size:0.9rem;font-weight:400;color:var(--color-muted);">/skein</span> -->
+  <!--   </div> -->
+  <!-- </div> -->
+
+  <!-- Action bar -->
+  <div class="action-bar">
+    <button class="btn">Discard</button>
+    <button class="btn btn-secondary">Save as Draft</button>
+    <button class="btn btn-primary">Publish</button>
+  </div>
+</div>

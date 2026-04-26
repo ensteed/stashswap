@@ -6,6 +6,7 @@ import "./styles/modals.css";
 import "./styles/navbar.css";
 import "./styles/profile.css";
 import "./styles/settings.css";
+import "./styles/edit-listing.css";
 import "./styles/not-found.css";
 import "../../assets/icons.svg";
 import "../../assets/profile_pics/default.png";

@@ -72,7 +72,8 @@ async function handle_get_edit_listing_by_id(request: FastifyRequest<{ Params: {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
-    const html_page = template.render_page_layout("edit-listing", { listing_name: listing._id });
+    const photo_thumb_section = `<div class="photo-thumb">Photo1</div><div class="photo-thumb">Photo2</div><div class="photo-thumb">Photo3</div>`
+    const html_page = template.render_page_layout("edit-listing", { photo_thumb_section });
     reply.type("html").send(html_page);
 }
 

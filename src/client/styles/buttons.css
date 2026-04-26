@@ -23,6 +23,19 @@
     color: var(--color-neutral);
 }
 
+.btn-secondary {
+    border: none;
+    background-color: var(--color-secondary);
+    color: var(--color-neutral);
+}
+
+.btn-secondary:hover {
+    border: none;
+    background-color: var(--color-secondary-darker);
+    color: var(--color-neutral);
+}
+
+
 .btn-primary:hover {
     border: none;
     background-color: var(--color-primary-darker);
