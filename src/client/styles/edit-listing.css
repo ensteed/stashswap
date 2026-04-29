@@ -1,11 +1,17 @@
 .edit-listing-page {
     padding: 1rem 0;
+    width: min(800px, calc(100% - 2rem));
+    margin: 0 auto;
+    display: grid;
 }
 
 /* Each panel in the edit listing page section */
 .edit-listing-page .section-panel {
     padding: 1rem 0;
     margin: 0.25rem;
+    border: 1px solid var(--color-borders);
+    border-radius: 28px;
+    box-shadow: 0 18px 50px -28px var(--color-box-shadow);
 }
 
 .edit-listing-page .header-section {

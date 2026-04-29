@@ -43,7 +43,8 @@ input.file {
 }
 
 .main-content {
-    margin: auto;
+    width: min(75rem, calc(100% - 2rem));
+    margin: 0 auto;
     padding: 1rem;
     max-width: 83rem;
 }
