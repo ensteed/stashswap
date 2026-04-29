@@ -1,71 +1,60 @@
 .edit-listing-page {
-    border: 1px solid green;
-    padding: 1rem;
+    padding: 1rem 0;
 }
 
-.header-section .edit-listing-page {
-    border: 1px solid red;
-    padding: 1rem;
+/* Each panel in the edit listing page section */
+.edit-listing-page .section-panel {
+    padding: 1rem 0;
+    margin: 0.25rem;
+}
+
+.edit-listing-page .header-section {
+    padding: 1rem 0;
     margin: 0.25rem;
 }
 
 .header-section .title {
-    border: 1px solid orange;
     padding: 1rem;
     margin: 0.25rem;
 }
 
 .header-section .title .step-num {
-    border: 1px solid blue;
-    padding: 1rem;
-    margin: 0.25rem;
-}
-
-/* Each panel in the edit listing page section */
-.edit-listing-page .section-panel {
-    border: 1px solid red;
     padding: 1rem;
     margin: 0.25rem;
 }
 
 /* Photo upload section */
 .edit-listing-page .photos {
-    border: 1px solid orange;
-    padding: 1rem;
+    padding: 1rem 0;
     margin: 0.25rem;
 }
 
 .photos .drop-area {
-    border: 1px solid blue;
-    padding: 1rem;
+    padding: 1rem 0;
     margin: 0.25rem;
 }
 
 .photos .photo-thumbs {
-    border: 1px solid blue;
     display: flex;
     flex-wrap: wrap;
-    padding: 1rem;
+    padding: 1rem 0;
     margin: 0.25rem;
 }
 
 .photo-thumbs .photo-thumb {
-    border: 1px solid cornflowerblue;
-    padding: 1rem;
+    padding: 1rem 0;
     margin: 0.25rem;
 }
 
 .photos .photo-hint {
-    border: 1px solid blue;
-    padding: 1rem;
+    padding: 1rem 0;
     margin: 0.25rem;
 }
 
 .edit-listing-page .action-bar {
-    border: 1px solid red;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding: 1rem;
+    padding: 1rem 0;
     margin: 0.25rem;
 }
