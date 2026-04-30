@@ -1,0 +1,892 @@
+:PROPERTIES:
+:GPTEL_MODEL: gpt-5.4
+:GPTEL_BACKEND: OpenAI
+:GPTEL_SYSTEM: You are a large language model living in Emacs and a helpful assistant. Respond concisely.
+:GPTEL_TOOLS:
+:GPTEL_BOUNDS: ((response (475 1819) (1897 2462) (2565 4316) (4351 4731) (4797 5706) (5778 6922) (7047 8108) (8168 9645) (9712 10607) (10648 11853) (12020 13826) (14006 15358) (15509 16697) (16818 18167) (18241 19849)))
+:END:
+
+*** How do I change default programs for extensions in linux again?
+
+Depends a bit on your desktop, but the usual Linux way is:
+
+*** Temporary / GUI way
+In most file managers:
+- Right-click a file of that type
+- *Properties* or *Open With*
+- Pick the app
+- Set *“Set as default”* / *“Always use this application”*
+
+*** Command-line way
+Use =xdg-mime=.
+
+1. Find the MIME type for a file:
+#+begin_src bash
+xdg-mime query filetype filename.pdf
+#+end_src
+
+Example output:
+#+begin_src bash
+application/pdf
+#+end_src
+
+2. See the current default app:
+#+begin_src bash
+xdg-mime query default application/pdf
+#+end_src
+
+3. Set a new default app:
+#+begin_src bash
+xdg-mime default org.pwmt.zathura.desktop application/pdf
+#+end_src
+
+You need the app’s =.desktop= file name. To find one:
+#+begin_src bash
+ls /usr/share/applications | grep -i zathura
+ls ~/.local/share/applications
+#+end_src
+
+*** Example
+Set VLC for MP4 videos:
+#+begin_src bash
+xdg-mime default vlc.desktop video/mp4
+#+end_src
+
+*** If you mean “by extension” specifically
+Linux usually maps by *MIME type*, not raw extension. So =.jpg=, =.png=, =.pdf=, etc. are handled through MIME associations.
+
+*** Useful file
+User-specific defaults are often stored in:
+#+begin_src bash
+~/.config/mimeapps.list
+#+end_src
+
+If you want, I can also show:
+- how to do it in *GNOME/KDE*
+- how to edit =mimeapps.list= manually
+- how to find the right =.desktop= entry quickly
+
+*** If you have margin (or padding) with three numbers, what do they mean?
+
+For CSS shorthand with *3 values* like:
+
+#+begin_src css
+margin: A B C;
+padding: A B C;
+#+end_src
+
+it means:
+
+- *A* = top
+- *B* = left and right
+- *C* = bottom
+
+So it expands to:
+
+#+begin_src css
+top: A;
+right: B;
+bottom: C;
+left: B;
+#+end_src
+
+Example:
+
+#+begin_src css
+margin: 10px 20px 30px;
+#+end_src
+
+means:
+
+- top = 10px
+- right = 20px
+- bottom = 30px
+- left = 20px
+
+Rule of thumb:
+- 1 value: all sides
+- 2 values: top/bottom, left/right
+- 3 values: top, left/right, bottom
+- 4 values: top, right, bottom, left
+
+Clockwise for 4: *top → right → bottom → left*.
+
+*** I'm confused on when I should try to use margin for spacing vs when I should try to use padding
+
+Use:
+
+- *padding* = space *inside* the element, between content and border
+- *margin* = space *outside* the element, between it and other elements
+
+Quick rule:
+- Want more clickable/background area? *padding*
+- Want more separation from neighboring elements? *margin*
+
+Examples:
+
+#+begin_src css
+button {
+  padding: 12px 16px; /* bigger button interior */
+  margin: 8px;        /* space around the button */
+}
+#+end_src
+
+*** Think of the box model
+From inside to outside:
+
+- content
+- padding
+- border
+- margin
+
+*** When to use padding
+Use padding when the space should feel like part of the element itself.
+
+Common cases:
+- buttons
+- cards
+- nav links
+- input fields
+- containers that need inner breathing room
+
+#+begin_src css
+.card {
+  padding: 24px;
+  border: 1px solid #ccc;
+}
+#+end_src
+
+If the element has a background color, that background extends through the padding.
+
+*** When to use margin
+Use margin when you want distance between elements.
+
+Common cases:
+- spacing between paragraphs
+- gap below headings
+- space between sections
+- separating cards from each other
+
+#+begin_src css
+h2 {
+  margin-bottom: 12px;
+}
+#+end_src
+
+*** Useful mental model
+- *padding grows the box inward/outward as part of itself*
+- *margin pushes other things away*
+
+*** Important gotchas
+1. *Margins can collapse*
+   Vertical margins between block elements can combine in ways that surprise you.
+2. *Padding does not collapse*
+3. *Padding affects background/clickable area*
+   Margin does not.
+
+*** A practical heuristic
+Usually:
+- use *padding* for spacing /inside components/
+- use *margin* for spacing /between components/
+
+If you want, I can give you a few “real layout examples” like:
+- button spacing
+- card layout
+- form fields
+- spacing text in articles
+
+*** How many px is 1 rem again?
+
+Usually /1rem = 16px/ by default.
+
+More precisely:
+- =rem= is based on the root element’s font size (=html=)
+- browsers usually default that to /16px/
+
+So:
+- =1rem= = 16px
+- =0.5rem= = 8px
+- =2rem= = 32px
+
+If you set:
+
+#+begin_src css
+html {
+  font-size: 20px;
+}
+#+end_src
+
+then:
+- =1rem= = 20px
+
+So the real answer is:
+- /default:/ 16px
+- /actual:/ whatever the root font size is
+
+*** And what are the default sizes for p and the header items?
+
+Default browser styles vary a bit, but the common defaults are roughly:
+
+- p: =1em= → usually =16px=
+- h1: =2em= → usually =32px=
+- h2: =1.5em= → usually =24px=
+- h3: =1.17em= → usually ≈ =18.72px=
+- h4: =1em= → usually =16px=
+- h5: =0.83em= → usually ≈ =13.28px=
+- h6: =0.67em= → usually ≈ =10.72px=
+
+Assuming the browser default base font size is =16px=.
+
+*/ Important detail
+These are usually in =em= in the user agent stylesheet, so they scale with the parent/font settings.
+
+*/ Typical default margins too
+Browsers also usually give headings and paragraphs default margins, for example:
+
+- p: often =margin: 1em 0=
+- h1: often around =0.67em 0=
+- h2: often around =0.83em 0=
+- h3: often around =1em 0=
+- h4: often around =1.33em 0=
+- h5: often around =1.67em 0=
+- h6: often around =2.33em 0=
+
+If you want, I can also give you a tiny “browser default typography cheat sheet” for the most common HTML tags.
+
+*** If I make header item 0.67rem instead of em, what would that do?
+
+=em= on a heading is relative to the heading’s inherited/current font size, while =rem= is relative to the root (=html=) font size.
+
+So if you set:
+
+#+begin_src css
+h1 { font-size: 0.67rem; }
+#+end_src
+
+that means:
+- =0.67 × root font size=
+- if root is 16px, that’s about *10.72px*
+
+That would make the heading *small*, because:
+- default =h1= is usually about =2em= (~32px at 16px base)
+- =0.67rem= is closer to the default size of an =h6=
+
+Key difference:
+- =0.67em= = 67% of the parent/current font size
+- =0.67rem= = 67% of the root font size, regardless of parent
+
+Example:
+#+begin_src css
+html { font-size: 16px; }
+section { font-size: 20px; }
+h1 { font-size: 0.67em; }   /* 13.4px */
+h2 { font-size: 0.67rem; }  /* 10.72px */
+#+end_src
+
+So switching from =em= to =rem= makes the size more consistent across contexts, but in this case it would also likely make the heading much smaller than you expect.
+
+Rule of thumb:
+- use =rem= for predictable global sizing
+- use =em= when you want something to scale with its container
+
+If you want, I can show exactly why browser default heading sizes use values like =2em=, =1.5em=, =1.17em=, etc.
+
+*** How do you make an element an exact circle? Say for example I had a number, and I wanted a circle aroung that number?
+
+Make the element:
+- equal width and height
+- =border-radius: 50%=
+- usually use flex/grid to center the text
+
+Example:
+
+#+begin_src css
+.badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: red;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#+end_src
+
+#+begin_src html
+<div class="badge">3</div>
+#+end_src
+
+That gives you a perfect circle.
+
+If you want the circle to size nicely around a single number, you can also do:
+
+#+begin_src css
+.badge {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #333;
+  color: white;
+}
+#+end_src
+
+A few notes:
+- If width and height are not equal, you get an oval.
+- =border-radius: 9999px= often works too, but =50%= is the usual circle approach.
+- For text inside, =inline-flex= is often nice if it sits inside a line of text.
+
+If you want, I can also show how to make one that:
+- grows with the number of digits
+- stays a perfect circle
+- works well for notification badges
+
+*** What is the difference between inline-flex and flex?
+
+The difference is mostly in how the element itself behaves in layout:
+
+- =display: flex= → the element is a /block-level flex container/
+- =display: inline-flex= → the element is an /inline-level flex container/
+
+Both make their children flex items. The flex behavior /inside/ is the same.
+
+*/ Main difference
+** =flex=
+Acts like a block element:
+- starts on a new line
+- usually stretches to fill available width
+
+#+begin_src css
+.container {
+  display: flex;
+}
+#+end_src
+
+** =inline-flex=
+Acts like an inline element:
+- stays in the flow of text
+- does not automatically take the full line width
+
+#+begin_src css
+.badge {
+  display: inline-flex;
+}
+#+end_src
+
+*/ Example use cases
+Use =flex= for:
+- page sections
+- nav bars
+- card rows
+- layout containers
+
+Use =inline-flex= for:
+- badges
+- pill labels
+- icon+text inside a sentence/line
+- small controls that should sit inline
+
+*/ Quick mental model
+- =flex= = “flex container as a block”
+- =inline-flex= = “flex container as an inline element”
+
+*/ Example
+#+begin_src html
+<span class="a">One</span>
+<span class="b">Two</span>
+#+end_src
+
+#+begin_src css
+.a {
+  display: flex;
+  background: lightblue;
+}
+
+.b {
+  display: inline-flex;
+  background: lightgreen;
+}
+#+end_src
+
+- =.a= will behave more like a block and break onto its own line
+- =.b= can sit inline with surrounding content
+
+If you want, I can also explain the similar pair:
+- =block= vs =inline-block=
+- and why =inline-flex= is often handy for buttons and badges
+
+*** Why 50% border radius? that is 50% of the width and height?
+
+Yes.
+
+=border-radius: 50%= means the corner radius is based on the element’s own size.
+
+For percentage border-radius:
+- horizontal radius is based on the element’s /width/
+- vertical radius is based on the element’s /height/
+
+So for a square:
+
+#+begin_src css
+width: 40px;
+height: 40px;
+border-radius: 50%;
+#+end_src
+
+that gives:
+- horizontal radius = 20px
+- vertical radius = 20px
+
+That rounds the shape into a circle.
+
+If the element is not square, like:
+
+#+begin_src css
+width: 60px;
+height: 40px;
+border-radius: 50%;
+#+end_src
+
+then you get:
+- horizontal radius = 30px
+- vertical radius = 20px
+
+So it becomes an ellipse/oval, not a perfect circle.
+
+That’s why:
+- equal width + height
+- plus =border-radius: 50%=
+
+gives a perfect circle.
+
+Small note:
+CSS can think of border-radius as making quarter-ellipses in the corners. With 50% on all corners of a square, those curves meet as a circle.
+
+*** Is border radius also 4 elements?
+
+Yes — =border-radius= can take 1, 2, 3, or 4 values, similar to margin/padding, but it applies to the /corners/.
+
+Order for 4 values:
+
+- top-left
+- top-right
+- bottom-right
+- bottom-left
+
+Example:
+
+#+begin_src css
+border-radius: 4px 8px 12px 16px;
+#+end_src
+
+means:
+- top-left: 4px
+- top-right: 8px
+- bottom-right: 12px
+- bottom-left: 16px
+
+// Shorthand patterns
+* 1 value
+#+begin_src css
+border-radius: 10px;
+#+end_src
+All 4 corners = 10px
+
+* 2 values
+#+begin_src css
+border-radius: 10px 20px;
+#+end_src
+
+means:
+- top-left + bottom-right = 10px
+- top-right + bottom-left = 20px
+
+* 3 values
+#+begin_src css
+border-radius: 10px 20px 30px;
+#+end_src
+
+means:
+- top-left = 10px
+- top-right + bottom-left = 20px
+- bottom-right = 30px
+
+* 4 values
+#+begin_src css
+border-radius: 10px 20px 30px 40px;
+#+end_src
+
+means:
+- top-left = 10px
+- top-right = 20px
+- bottom-right = 30px
+- bottom-left = 40px
+
+// Extra twist
+=border-radius= can also use a slash to set /horizontal/ and /vertical/ radii separately, like:
+
+#+begin_src css
+border-radius: 50% / 30%;
+#+end_src
+
+But most of the time you just use the regular form.
+
+So:
+- =margin/padding= shorthand is about /sides/
+- =border-radius= shorthand is about /corners
+
+*** But how can I align the item vertically so the centers are aligned with the item next to it..? It seems i would need to put their parent container in a flexbox
+
+You often /don’t need a parent flex container/.
+
+If the element is inline or inline-flex, use:
+
+#+begin_src css
+vertical-align: middle;
+#+end_src
+
+Example:
+
+#+begin_src css
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+#+end_src
+
+That helps align the badge with adjacent inline content.
+
+But there are two different “vertical align” problems:
+
+*/ 1. Aligning content /inside/ the badge
+Use flex on the badge itself:
+
+#+begin_src css
+display: inline-flex;
+align-items: center;
+justify-content: center;
+#+end_src
+
+That centers the number inside the circle.
+
+*/ 2. Aligning the badge with neighboring text/elements
+Use:
+
+#+begin_src css
+vertical-align: middle;
+#+end_src
+
+on the inline/inline-block/inline-flex element.
+
+*/ If both items are standalone boxes next to each other
+Then yes, a parent flex container is often the cleanest way:
+
+#+begin_src css
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+#+end_src
+
+That aligns their centers vertically.
+
+Example:
+
+#+begin_src html
+<div class="row">
+  <span>Notifications</span>
+  <span class="badge">3</span>
+</div>
+#+end_src
+
+#+begin_src css
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: red;
+  color: white;
+}
+#+end_src
+
+*/ Rule of thumb
+- aligning text-sized inline things: try =vertical-align=
+- aligning sibling boxes/components: parent with =display: flex; align-items: center=
+- aligning content inside one element: flex on that element
+
+So your instinct is right: if these are really two sibling components, /parent flexbox is usually the easiest/.
+
+*** If a parent item is a grid do the new grid items automatically add as rows (ie a single column)? Where for a flexbox you would have to specify that it should go vertically?
+
+Yes, roughly.
+
+A grid container defaults to adding items in /rows/, which usually looks like:
+
+- new items fill left-to-right across the current row
+- then wrap to the next row
+
+So the default is /not/ exactly “single column” — it’s more like:
+- auto-placement by rows (=grid-auto-flow: row=)
+
+What happens depends on your columns.
+
+Example:
+
+#+begin_src css
+.container {
+  display: grid;
+}
+#+end_src
+
+If you don’t define columns, grid effectively behaves like there is one column, so items stack vertically.
+
+So in that sense: yes, they appear as rows, one under another.
+
+But if you define multiple columns:
+
+#+begin_src css
+.container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+#+end_src
+
+then items will auto-place:
+- item 1 row 1 col 1
+- item 2 row 1 col 2
+- item 3 row 2 col 1
+- item 4 row 2 col 2
+
+By contrast, flexbox defaults to:
+
+#+begin_src css
+display: flex;
+flex-direction: row;
+#+end_src
+
+So flex items go horizontally unless you set:
+
+#+begin_src css
+flex-direction: column;
+#+end_src
+
+// Short version
+- =grid= default: auto-place in rows; with no explicit columns, items stack vertically
+- =flex= default: horizontal row layout
+
+So your intuition is basically right, with the small caveat that grid’s behavior depends on the column definition.
+
+If you want, I can give you a super short “grid vs flex defaults” cheat sheet.
+
+*** What do you mean they fill up a row and then add more rows? You mean if you add inline items? Or is that still true for block level items also?
+
+I mean /grid items/ — children of an element with =display: grid=.
+
+Once something is a /grid item/, it doesn’t matter whether it would normally be inline or block. Grid layout takes over.
+
+So in:
+
+#+begin_src html
+<div class="container">
+  <div>A</div>
+  <span>B</span>
+  <p>C</p>
+</div>
+#+end_src
+
+#+begin_src css
+.container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+#+end_src
+
+all three children are grid items:
+- =div=
+- =span=
+- =p=
+
+and they get placed into the grid cells, regardless of their normal block/inline behavior.
+
+So:
+- this is /not/ about inline vs block elements
+- it is about /how many grid columns exist/
+
+Example with 2 columns:
+
+- A goes in row 1, col 1
+- B goes in row 1, col 2
+- C goes in row 2, col 1
+
+If you /don’t/ define columns:
+
+#+begin_src css
+.container {
+  display: grid;
+}
+#+end_src
+
+then items usually stack one per row, which looks like a single column.
+
+So when I said “fill up a row, then add more rows,” I meant:
+- if your grid has multiple columns, items are auto-placed across that row first
+- when that row has no more columns available, the next item starts a new row
+
+Not related to whether the child elements are block or inline.
+
+*** So if you have a single column, what is the advantage of using grid vs just using block level elements (ie divs)?
+
+If it’s truly just “stack these things vertically,” plain block flow is usually simpler.
+
+So:
+
+- /just one column, no special alignment/layout needs/ → regular block elements are often enough
+- /grid/ becomes useful when you want more control, even if it currently looks like one column
+
+Why still use grid for one column?
+
+- easy =gap=
+- easy control of rows
+- easier to expand later to multiple columns
+- consistent layout system if the rest of the UI already uses grid
+- precise placement/alignment if needed
+
+Example:
+
+Plain block flow:
+#+begin_src css
+.container > * {
+  margin-bottom: 1rem;
+}
+.container > *:last-child {
+  margin-bottom: 0;
+}
+#+end_src
+
+Grid:
+#+begin_src css
+.container {
+  display: grid;
+  gap: 1rem;
+}
+#+end_src
+
+That’s one nice advantage: =gap= is cleaner than managing margins.
+
+Also, with grid, if later you want two columns at larger widths:
+
+#+begin_src css
+.container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 700px) {
+  .container {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+#+end_src
+
+That transition is very natural.
+
+So the honest answer:
+- for a simple vertical stack, grid is often unnecessary
+- use grid when you want layout control, gap handling, or future flexibility
+
+If you want, I can also explain when you’d choose:
+- block flow
+- flex column
+- single-column grid
+
+*** What would be advantage of grid or flex for the single column use?
+
+For a single column, the main advantages are about /spacing and alignment/, not “making it vertical.”
+
+*** Block flow (=div=s only)
+Best when you just need items stacked naturally.
+
+Pros:
+- Simplest
+- Least CSS
+- Good default document flow
+
+Cons:
+- Spacing usually needs margins
+- Aligning items consistently can get clunky
+- Less explicit as a layout system
+
+*** Flex (=display: flex; flex-direction: column=)
+Good when the parent controls how children stack and align.
+
+Pros:
+- Easy vertical stacking
+- Easy =gap=
+- Easy cross-axis alignment:
+  #+begin_src css
+  align-items: center;
+  #+end_src
+- Easy to push items apart:
+  #+begin_src css
+  justify-content: space-between;
+  #+end_src
+- Great for UI components
+
+Example:
+#+begin_src css
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+#+end_src
+
+*** Grid (=display: grid=)
+Good when you want structured layout control, even in one column.
+
+Pros:
+- Easy =gap=
+- Rows can be explicitly sized
+- Easy to expand to multiple columns later
+- Nice if the whole page/component already uses grid
+
+Example:
+#+begin_src css
+.container {
+  display: grid;
+  gap: 1rem;
+}
+#+end_src
+
+*** So for a single column:
+- *block flow*: simplest content stacking
+- *flex column*: best when alignment/distribution matters
+- *grid*: best when layout structure matters or may grow later
+
+*** Rule of thumb
+- Content/document flow → block
+- Component/layout in one direction → flex
+- More structured layout → grid
+
+For a /simple single column/, flex is usually more useful than grid unless you specifically want grid behavior or future multi-column expansion.
+
+*** 

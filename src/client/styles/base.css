@@ -3,15 +3,18 @@
 
 /* Color Palette */
 :root {
+
     --color-primary: #e07a5f;
     --color-primary-darker: #c05a3f;
+    --color-primary-lighter: #e07a5f04;
     --color-secondary: #81b29a;
     --color-neutral: #fdfbf7;
     --color-neutral-darker: #dddbd7;
     --color-accent: #f2cc8f;
     --color-text: #3d404b;
-    --color-borders: #3d404b33;
-    --color-box-shadow: rgba(0, 0, 0, 0.25);
+    --color-muted: #6a6d75;
+    --color-borders: rgba(61, 64, 75, 0.12);
+    --color-box-shadow: rgba(61, 64, 75, 0.14);
 }
 
 body {
