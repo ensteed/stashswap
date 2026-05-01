@@ -16,6 +16,7 @@ import * as emapi from "./services/email.js";
 import { is_http_error, create_err_resp, make_http_error } from "./web/error.js";
 import { config } from "./config.js";
 import mongo from "./db.js"
+import { get_local_ip } from "./util.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,9 +104,11 @@ async function start_server() {
     });
 
     try {
-        await fastify.listen({ port: port });
+        await fastify.listen({ port: port, host: '0.0.0.0' });
         ilog(`Server listening at:`);
         ilog(`- Local:   http://localhost:${port}`);
+        ilog(`- IP   :   http://${get_local_ip()}:${port}`);
+        
     } catch (err) {
         elog("Server failed to start:", err);
     }
