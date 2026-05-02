@@ -39,14 +39,21 @@ const DROPDOWN_MENUS: dropdown_menu[] = [
     },
 ];
 
-const GENERAL_BUTTONS: general_button[] = [
-    // {
-    //     id: "btn-nav-right-login",
-    //     on_click: (_event) => {
-    //         show_modal(0);
-    //     },
-    // },
-];
+interface drop_area_meta {
+    accepted_exts: string[];
+}
+
+function assert(condition: boolean, message: string = "") {
+    if (!condition) {
+        throw new Error("Assertion failed" + message ? ": " + message  : "");
+    }
+}
+
+const DROP_AREAS: Record<string, drop_area_meta> = {
+    edit_listing_photo_drop_area: {
+        accepted_exts: ["png", "webp", "jpg"]
+    }
+};
 
 function get_event_element(target: EventTarget | null): HTMLElement | null {
     return target instanceof HTMLElement ? target : null;
@@ -67,16 +74,6 @@ function fade_and_remove_item(id: string, delay = 1000) {
         el.addEventListener("transitionend", () => el.remove(), { once: true });
         console.log(`Item ${id} should now be removed!`);
     }, delay);
-}
-
-function show_modal(ind: number) {
-    const modal = MODAL_DIALOGS[ind];
-    if (!modal) return;
-
-    const dlg = get_dialog_by_id(modal.id);
-    if (dlg) {
-        dlg.showModal();
-    }
 }
 
 function handle_click_general_buttons(event: MouseEvent) {
@@ -220,12 +217,53 @@ function on_dom_content_loaded() {
 function client_init() {
     if (window.__appInit) return;
 
+    console.log("Client init called");
+
     window.__appInit = true;
     document.addEventListener("click", handle_click);
     document.addEventListener("mousedown", handle_mousedown);
     document.addEventListener("keydown", handle_keydown);
     document.addEventListener("htmx:load", handle_htmx_load as EventListener);
     window.addEventListener("DOMContentLoaded", on_dom_content_loaded);
+
+    document.addEventListener("dragover", (e: DragEvent) => {
+        e.preventDefault();
+        const item = get_event_element(e.target);
+        const da = item ? DROP_AREAS[item.id] : null;
+        if (!da) return;
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    });
+
+    document.addEventListener("drop", (e: DragEvent) => {
+        e.preventDefault();
+        const item = get_event_element(e.target);
+        const da = item ? DROP_AREAS[item.id] : null;
+        if (!da) return;
+        const input_element = document.getElementById("edit_listing_photo_upload_input");
+        if (!input_element) return;
+        assert(input_element instanceof HTMLInputElement);        
+
+        const files = e.dataTransfer?.files;
+        if (!files) return;
+
+        let should_drop: boolean = files.length !== 0;
+        for (let i = 0; i < files.length && should_drop; ++i) {
+            const file = files.item(i);
+            if (!file) return;
+            
+            const ext = file.name.includes(".")
+                ? file.name.split(".").pop()?.toLowerCase()
+                : "";
+
+            if (!ext || !da.accepted_exts.includes(ext)) should_drop = false;
+        }
+
+        if (should_drop) {
+            (input_element as HTMLInputElement).files = files;
+        }
+    });
+    
+    
 }
 
 client_init();

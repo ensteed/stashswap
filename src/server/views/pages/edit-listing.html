@@ -14,11 +14,14 @@
   <section class="section-panel">
     <h2 class="title"><span class="step-num">1</span> Photos</h2>
     <div class="photos">
-      <div class="drop-area">
-        <div class="drop-icon">📷</div>
-        <div><strong>Drag &amp; drop photos here</strong></div>
-        <p>or click to browse · up to 10 photos · 10 MB each</p>
-      </div>
+      <form id="edit_listing_photo_upload_form">
+        <label id="edit_listing_photo_drop_area" class="drop-area">
+          <div class="drop-icon">📷</div>
+          <div><strong>Drag &amp; drop photos here</strong></div>
+          <p>or click to browse · up to 10 photos · 10 MB each</p>
+        </label>
+        <input id="edit_listing_photo_upload_input" type="file" name="photos" multiple hidden>
+      </form>
       <div class="photo-thumbs">
         {{photo_thumb_section}}
       </div>

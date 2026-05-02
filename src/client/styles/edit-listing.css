@@ -57,7 +57,7 @@
     gap: 1rem;
 }
 
-.photos .drop-area {
+.drop-area {
     border: 2px dashed var(--color-primary);
     border-radius: 1.5rem;
     background: var(--color-primary-lighter);
@@ -70,10 +70,21 @@
         border-color 160ms ease;
 }
 
-.photos .drop-area:hover {
+.drop-area:hover {
     background: #e07a5f0f;
     border-color: var(--color-primary-darker);
 }
+
+drop-area.ok {
+    border-color: green;
+    background: #eefbee;
+}
+
+drop-area.bad {
+    border-color: red;
+    background: #fff0f0;
+}
+
 
 .drop-area .drop-icon {
     font-size: 2.2rem;
