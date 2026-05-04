@@ -39,20 +39,31 @@ const DROPDOWN_MENUS: dropdown_menu[] = [
     },
 ];
 
+const GENERAL_BUTTONS = [
+    // {
+    //     id: "btn-nav-right-login",
+    //     on_click: (_e) => {
+    //         show_modal(0);
+    //     },
+    // },
+];
+
 interface drop_area_meta {
-    accepted_exts: string[];
+    accepted_mime_types: Set<string>;
+    accepted_exts: Set<string>;
 }
 
 function assert(condition: boolean, message: string = "") {
     if (!condition) {
-        throw new Error("Assertion failed" + message ? ": " + message  : "");
+        throw new Error("Assertion failed" + message ? ": " + message : "");
     }
 }
 
 const DROP_AREAS: Record<string, drop_area_meta> = {
     edit_listing_photo_drop_area: {
-        accepted_exts: ["png", "webp", "jpg"]
-    }
+        accepted_mime_types: new Set(["image/png", "image/jpeg", "image/webp"]),
+        accepted_exts: new Set(["png", "webp", "jpeg", "jpg"]),
+    },
 };
 
 function get_event_element(target: EventTarget | null): HTMLElement | null {
@@ -74,24 +85,6 @@ function fade_and_remove_item(id: string, delay = 1000) {
         el.addEventListener("transitionend", () => el.remove(), { once: true });
         console.log(`Item ${id} should now be removed!`);
     }, delay);
-}
-
-function handle_click_general_buttons(event: MouseEvent) {
-    const target = get_event_element(event.target);
-    if (!target) return;
-
-    for (const btn of GENERAL_BUTTONS) {
-        // If the target id matches then just do that, otherwise we gotta get the element from the document and see if it contains the target
-        // as we might have icons or other such things that got the click
-        if (target.id === btn.id) {
-            btn.on_click(event);
-        } else {
-            const btn_element = document.getElementById(btn.id);
-            if (btn_element && btn_element.contains(target)) {
-                btn.on_click(event);
-            }
-        }
-    }
 }
 
 function handle_click_dropdown_menus(event: MouseEvent) {
@@ -167,7 +160,6 @@ function handle_mousedown(event: MouseEvent) {
 function handle_click(event: MouseEvent) {
     handle_click_modal_dialogs(event);
     handle_click_dropdown_menus(event);
-    handle_click_general_buttons(event);
 }
 
 function handle_keydown(event: KeyboardEvent) {
@@ -214,6 +206,36 @@ function on_dom_content_loaded() {
     }
 }
 
+function clear_drop_area_states() {
+    for (const key of Object.keys(DROP_AREAS)) {
+        const element = document.getElementById(key);
+        if (element) element.classList.remove("valid", "invalid");
+    }
+}
+
+function are_drop_items_valid(da: drop_area_meta, items: DataTransferItemList): boolean {
+    if (!da) return false;
+    for (let i = 0; i < items.length; ++i) {
+        const kind = items[i].kind;
+        const type = items[i].type;
+        if (kind !== "file" || !da.accepted_mime_types.has(type)) return false;
+    }
+    return items.length > 0;
+}
+
+function are_drop_files_valid(da: drop_area_meta, files: FileList): boolean {
+    if (!da) return false;
+    for (let i = 0; i < files.length; ++i) {
+        const file = files.item(i);
+        if (!file) return false;
+        const ext = file.name.includes(".") ? file.name.split(".").pop()?.toLowerCase() : "";
+        const accepted_mime_type = da.accepted_mime_types.has(file.type);
+        const accepted_file_ext = ext && da.accepted_exts.has(ext);
+        if (!accepted_mime_type && !accepted_file_ext) return false;
+    }
+    return files.length > 0;
+}
+
 function client_init() {
     if (window.__appInit) return;
 
@@ -228,42 +250,30 @@ function client_init() {
 
     document.addEventListener("dragover", (e: DragEvent) => {
         e.preventDefault();
+        clear_drop_area_states();
         const item = get_event_element(e.target);
-        const da = item ? DROP_AREAS[item.id] : null;
-        if (!da) return;
-        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+        if (!item) return;
+        const da = DROP_AREAS[item.id];
+        e.dataTransfer?.items;
+        if (!da || !e.dataTransfer?.files) return;
+        const da_valid = are_drop_items_valid(da, e.dataTransfer.items);
+        item.classList.toggle("valid", da_valid);
+        item.classList.toggle("invalid", !da_valid);
     });
 
     document.addEventListener("drop", (e: DragEvent) => {
         e.preventDefault();
         const item = get_event_element(e.target);
-        const da = item ? DROP_AREAS[item.id] : null;
-        if (!da) return;
+        if (!item) return;
+        const da = DROP_AREAS[item.id];
+        if (!da || !e.dataTransfer?.files) return;
+        const da_valid = are_drop_files_valid(da, e.dataTransfer.files);
+        if (!da_valid) return;
         const input_element = document.getElementById("edit_listing_photo_upload_input");
         if (!input_element) return;
-        assert(input_element instanceof HTMLInputElement);        
-
-        const files = e.dataTransfer?.files;
-        if (!files) return;
-
-        let should_drop: boolean = files.length !== 0;
-        for (let i = 0; i < files.length && should_drop; ++i) {
-            const file = files.item(i);
-            if (!file) return;
-            
-            const ext = file.name.includes(".")
-                ? file.name.split(".").pop()?.toLowerCase()
-                : "";
-
-            if (!ext || !da.accepted_exts.includes(ext)) should_drop = false;
-        }
-
-        if (should_drop) {
-            (input_element as HTMLInputElement).files = files;
-        }
+        assert(input_element instanceof HTMLInputElement);
+        (input_element as HTMLInputElement).files = e.dataTransfer.files;
     });
-    
-    
 }
 
 client_init();

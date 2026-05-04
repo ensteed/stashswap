@@ -75,16 +75,15 @@
     border-color: var(--color-primary-darker);
 }
 
-drop-area.ok {
+.drop-area.valid {
     border-color: green;
     background: #eefbee;
 }
 
-drop-area.bad {
+.drop-area.invalid {
     border-color: red;
     background: #fff0f0;
 }
-
 
 .drop-area .drop-icon {
     font-size: 2.2rem;
