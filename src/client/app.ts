@@ -214,7 +214,6 @@ function clear_drop_area_states() {
 }
 
 function are_drop_items_valid(da: drop_area_meta, items: DataTransferItemList): boolean {
-    if (!da) return false;
     for (let i = 0; i < items.length; ++i) {
         const kind = items[i].kind;
         const type = items[i].type;
@@ -253,12 +252,21 @@ function client_init() {
         clear_drop_area_states();
         const item = get_event_element(e.target);
         if (!item) return;
-        const da = DROP_AREAS[item.id];
-        e.dataTransfer?.items;
-        if (!da || !e.dataTransfer?.files) return;
+        let da: drop_area_meta | null = null;
+        let da_element: HTMLElement | null = null;
+        for ( const [id,daval] of Object.entries(DROP_AREAS)) {
+            da_element = document.getElementById(id);
+            if (da_element?.contains(item)) {
+                da = daval;
+                break;
+            }
+        }
+        
+        if (!da || !e.dataTransfer?.files || !da_element) return;
         const da_valid = are_drop_items_valid(da, e.dataTransfer.items);
-        item.classList.toggle("valid", da_valid);
-        item.classList.toggle("invalid", !da_valid);
+        console.log("Should be setting to", da_valid);
+        da_element.classList.toggle("valid", da_valid);
+        da_element.classList.toggle("invalid", !da_valid);
     });
 
     document.addEventListener("drop", (e: DragEvent) => {
