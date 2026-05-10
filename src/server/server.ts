@@ -11,6 +11,7 @@ import { create_auth_routes, verify_liuser, type liuser_payload } from "./web/au
 import { create_profile_routes } from "./web/profile.js";
 import { create_user_routes} from "./web/users.js";
 import { create_listing_routes } from "./web/listings.js";
+import { create_listing_api_routes } from "./api/listings.js";
 
 import * as emapi from "./services/email.js";
 import { is_http_error, create_err_resp, make_http_error } from "./web/error.js";
@@ -86,6 +87,7 @@ async function start_server() {
     fastify.register(create_auth_routes());
     fastify.register(create_user_routes());
     fastify.register(create_listing_routes());
+    fastify.register(create_listing_api_routes());
 
     fastify.setErrorHandler((err: any, _request, reply) => {
         if (is_http_error(err)) {
