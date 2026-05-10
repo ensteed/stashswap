@@ -7,7 +7,7 @@ import template from "../template.js";
 import { rethrow_http_error, make_http_error, create_err_resp } from "./error.js";
 import { type ss_user } from "../models/ss_user.js";
 import { amanifest } from "../assets.js";
-import { config } from "../config.js";
+import config from "../config.js";
 
 declare module "fastify" {
     interface FastifyRequest {
@@ -161,10 +161,10 @@ async function handle_post_login(request: FastifyRequest, reply: FastifyReply) {
         ilog(`${usr.username} - ${usr.email} (${usr._id}) logged in successfully`);
         await create_fake_login_timeout(usr);
         reply.header("HX-Redirect", "/dashboard");
-        reply.type("html").send("");
+        reply.type("text/html").send("");
     } catch (err: any) {
         rethrow_http_error(err);
-        reply.type("html").send(create_err_resp(err));
+        reply.type("text/html").send(create_err_resp(err));
     }
 }
 
@@ -176,10 +176,10 @@ function handle_post_logout(_request: FastifyRequest, reply: FastifyReply) {
 function handle_get_login(request: FastifyRequest, reply: FastifyReply) {
     const login_html = template.render_partial("login");
     if (request.headers["hx-request"]) {
-        reply.type("html").send(login_html);
+        reply.type("text/html").send(login_html);
     } else {
         const html = template.render_page_layout("landing", {}, "main", { modal_root_content: login_html });
-        reply.type("html").send(html);
+        reply.type("text/html").send(html);
     }
 }
 
@@ -193,7 +193,7 @@ async function handle_get_me(request: FastifyRequest, reply: FastifyReply) {
     if (!request.liuser) {
         ilog("me: user not logged in");
         reply
-            .type("html")
+            .type("text/html")
             .send(template.render_partial("navbar-right-not-logged-in.html", { icons_path: amanifest.icons }));
         return;
     }
@@ -205,7 +205,7 @@ async function handle_get_me(request: FastifyRequest, reply: FastifyReply) {
         }
 
         ilog(`User ${usr.username} - ${usr.email} (${usr._id}) logged in`);
-        reply.type("html").send(
+        reply.type("text/html").send(
             template.render_partial("navbar-right-logged-in", {
                 first_name: usr.first_name ?? "",
                 icons_path: amanifest.icons,
@@ -213,7 +213,7 @@ async function handle_get_me(request: FastifyRequest, reply: FastifyReply) {
         );
     } catch (err: any) {
         rethrow_http_error(err);
-        reply.type("html").send(create_err_resp(err));
+        reply.type("text/html").send(create_err_resp(err));
     }
 }
 

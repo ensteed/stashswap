@@ -2,17 +2,14 @@ import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply 
 import fastifyMultipart from "@fastify/multipart";
 import { Collection, type UpdateResult, type UpdateFilter } from "mongodb";
 import sharp from "sharp";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
-import { config } from "../config.js";
+import aws from "../services/aws.js"
+import config from "../config.js";
 import template from "../template.js";
 import mongo from "../db.js";
 import { verify_liuser, clear_user_session, type liuser_payload } from "./auth.js";
 import { type ss_user } from "../models/ss_user.js";
 import { make_http_error, is_http_error } from "./error.js";
 import { amanifest } from "../assets.js";
-
-const s3 = new S3Client({ region: config.aws.s3_region });
 
 async function sanitize_profile_pic(file_buffer: Buffer) {
     const sharp_img = sharp(file_buffer)
@@ -41,20 +38,9 @@ async function update_user(
 }
 
 async function upload_profile_pic_to_s3(user_id: string, data: Buffer) {
-    const s3_key = `${user_id}.webp`;
-    const cmd = new PutObjectCommand({
-        Bucket: config.aws.s3_profile_pics_bucket,
-        Key: s3_key,
-        Body: data,
-        ContentType: "image/webp",
-    });
-
-    try {
-        await s3.send(cmd);
-        ilog("Uploaded profile pic for user ", user_id, " to S3 key ", s3_key);
-    } catch (err: any) {
-        throw make_http_error("S3 upload failed: " + err.message, 500);
-    }
+    const s3_key = config.aws.s3_profile_pics_pf + `${user_id}.webp`;
+    const mime_type = "image/webp";
+    await aws.upload_to_s3(s3_key, data, mime_type);
 }
 
 function verify_buffer_is_image(buf: Buffer): boolean {
@@ -100,7 +86,7 @@ async function handle_get_edit_profile(request: FastifyRequest, reply: FastifyRe
         wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
         clear_user_session(reply);
         reply.header("HX-Redirect", "/login");
-        reply.type("html").send("");
+        reply.type("text/html").send("");
         return;
     }
 
@@ -110,7 +96,7 @@ async function handle_get_edit_profile(request: FastifyRequest, reply: FastifyRe
         profile_about: usr.profile.about,
         default_pfp: amanifest.default_profile_pic,
     });
-    reply.type("html").send(index_html);
+    reply.type("text/html").send(index_html);
 }
 
 async function handle_post_profile_pic(request: FastifyRequest, reply: FastifyReply) {
@@ -131,26 +117,26 @@ async function handle_post_profile_pic(request: FastifyRequest, reply: FastifyRe
 
         const data = await sanitize_profile_pic(buffer);
 
-        const pfp_s3_key = `${config.aws.s3_base_url}/${usr.id}.webp`;
+        const pfp_s3_key = `${config.aws.s3_base_url}/${config.aws.s3_profile_pics_pf}/${usr.id}.webp`;
         const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
         const result = await update_user(usr.id, update_op, users);
 
         if (result.acknowledged && result.matchedCount == 1) {
             await upload_profile_pic_to_s3(usr.id, data);
             const html = create_upload_pfp_html(pfp_s3_key, null);
-            reply.type("html").send(html);
+            reply.type("text/html").send(html);
         } else if (result.acknowledged) {
             wlog(`User ${usr.id} not found in db - likely removed while logged in`);
             clear_user_session(reply);
             reply.header("HX-Redirect", "/login");
-            reply.type("html").send("");
+            reply.type("text/html").send("");
         } else {
             throw make_http_error("Database update failed", 500);
         }
     } catch (err: any) {
         if (!is_http_error(err)) {
             const html = create_upload_pfp_html(default_pfp, err);
-            reply.type("html").send(html);
+            reply.type("text/html").send(html);
         } else {
             throw err;
         }
@@ -174,12 +160,12 @@ async function handle_post_profile(request: FastifyRequest, reply: FastifyReply)
     if (result.acknowledged && result.matchedCount == 1) {
         ilog(`Updated user ${usr.id} profile.public_name to ${public_name} and about to ${about}`);
         const html = create_update_pfp_html(null);
-        reply.type("html").send(html);
+        reply.type("text/html").send(html);
     } else if (result.acknowledged) {
         wlog(`User ${usr.id} not found in db - likely removed while logged in`);
         clear_user_session(reply);
         reply.header("HX-Redirect", "/login");
-        reply.type("html").send("");
+        reply.type("text/html").send("");
     } else {
         throw make_http_error("Database update failed", 500);
     }

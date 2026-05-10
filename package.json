@@ -30,6 +30,8 @@
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.919.0",
+        "@aws-sdk/s3-presigned-post": "^3.1045.0",
+        "@aws-sdk/s3-request-presigner": "^3.1045.0",
         "@fastify/cookie": "^11.0.0",
         "@fastify/formbody": "^8.0.0",
         "@fastify/multipart": "^9.0.0",

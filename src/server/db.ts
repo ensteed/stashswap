@@ -1,5 +1,5 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
-import { config } from "./config.js";
+import config from "./config.js";
 import { type ss_listing } from "./models/ss_listing.js"
 import { type ss_user } from "./models/ss_user.js"
 

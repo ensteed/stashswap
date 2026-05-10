@@ -3,7 +3,10 @@ import fastifyMultipart from "@fastify/multipart";
 import { verify_liuser, type liuser_payload } from "./auth.js";
 import { make_http_error, rethrow_http_error } from "./error.js";
 import { Collection, ObjectId } from "mongodb";
+import crypto from "crypto";
 import mongo from "../db.js";
+import aws from "../services/aws.js";
+import config from "../config.js";
 import { type ss_listing } from "../models/ss_listing.js";
 import template from "../template.js";
 
@@ -72,9 +75,9 @@ async function handle_get_edit_listing_by_id(request: FastifyRequest<{ Params: {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
-    const photo_thumb_section = `<div class="photo-thumb">Photo1</div><div class="photo-thumb">Photo2</div><div class="photo-thumb">Photo3</div>`
+    const photo_thumb_section = `<div class="photo-thumb">Photo1</div><div class="photo-thumb">Photo2</div><div class="photo-thumb">Photo3</div>`;
     const html_page = template.render_page_layout("edit-listing", { photo_thumb_section });
-    reply.type("html").send(html_page);
+    reply.type("text/html").send(html_page);
 }
 
 // This will create the listing draft and redirect right away to the edit page for it. This is better than returning a "new listing"
@@ -87,9 +90,25 @@ async function handle_post_listing_draft(request: FastifyRequest, reply: Fastify
     reply.redirect(`/listings/${draft_listing._id}/edit`);
 }
 
+async function handle_get_listing_presigned_url(
+    request: FastifyRequest<{ Params: { id: string; fname: string } }>,
+    reply: FastifyReply
+) {
+    const { id, fname } = request.params;
+    const prefix = crypto.randomBytes(16).toString("hex");
+    const key = `${config.aws.s3_listing_pics_pf}/${id}/${prefix}-${fname}`;
+    const presigned = await aws.create_presigned_post_url(key);
+    reply.send(presigned);
+}
+
 export function create_listing_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
         await fastify.register(fastifyMultipart, { limits: { fileSize: 4 * 1024 * 1024 } });
+        fastify.get<{ Params: { id: string; fname: string } }>(
+            "/listings/:id/postimageurl",
+            { preHandler: verify_liuser },
+            handle_get_listing_presigned_url
+        );
 
         fastify.post("/listings", { preHandler: verify_liuser }, handle_post_listing_draft);
         fastify.get<{ Params: { id: string } }>(

@@ -1,4 +1,4 @@
-import { config } from "../config.js";
+import config from "../config.js";
 import { Resend, type CreateEmailResponse } from "resend";
 
 const resend = new Resend(config.resend.api_key);

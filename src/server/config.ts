@@ -16,7 +16,7 @@ function require_env_float(name: string): number {
     return parseFloat(value);
 }
 
-export const config = {
+const config = {
     port: require_env_int("PORT"),
     stripe: {
         app_base_url: require_env_string("STRIPE_APP_BASE_URL"),
@@ -24,9 +24,12 @@ export const config = {
         webhook_secret: require_env_string("STRIPE_WEBHOOK_SECRET"),
     },
     aws: {
-        s3_profile_pics_bucket: require_env_string("AWS_S3_BUCKET_PROFILE_PICS"),
+        s3_bucket: require_env_string("AWS_S3_BUCKET"),
+        s3_profile_pics_pf: require_env_string("AWS_S3_PROFILE_PICS_PF"),
+        s3_listing_pics_pf: require_env_string("AWS_S3_LISTING_PICS_PF"),
+        s3_tmp_pics_pf: require_env_string("AWS_S3_TMP_PICS_PF"),
         s3_region: require_env_string("AWS_S3_REGION"),
-        s3_base_url: `https://${require_env_string("AWS_S3_BUCKET_PROFILE_PICS")}.s3.${require_env_string("AWS_S3_REGION")}.amazonaws.com`,
+        s3_base_url: `https://${require_env_string("AWS_S3_BUCKET")}.s3.${require_env_string("AWS_S3_REGION")}.amazonaws.com`,
         s3_access_key_id: require_env_string("AWS_ACCESS_KEY_ID"),
         s3_secret_access_key: require_env_string("AWS_SECRET_ACCESS_KEY"),
     },
@@ -43,3 +46,5 @@ export const config = {
         api_key: require_env_string("RESEND_API_KEY"),
     },
 };
+
+export default config;

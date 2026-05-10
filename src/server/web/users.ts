@@ -117,10 +117,10 @@ async function handle_post_create_account(request: FastifyRequest, reply: Fastif
         await create_user(new_user, users);
         await create_user_session(reply, new_user._id);
         reply.header("HX-Redirect", "/dashboard");
-        reply.type("html").send("");
+        reply.type("text/html").send("");
     } catch (err: any) {
         rethrow_http_error(err);
-        reply.type("html").send(create_err_resp(err));
+        reply.type("text/html").send(create_err_resp(err));
     }
 }
 
@@ -128,7 +128,7 @@ export function create_user_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
         fastify.post("/create-account", handle_post_create_account);
         fastify.get("/create-account", (_request, reply) => {
-            reply.type("html").send(template.render_partial("create-account"));
+            reply.type("text/html").send(template.render_partial("create-account"));
         });
     };
 }

@@ -14,7 +14,7 @@ import { create_listing_routes } from "./web/listings.js";
 
 import * as emapi from "./services/email.js";
 import { is_http_error, create_err_resp, make_http_error } from "./web/error.js";
-import { config } from "./config.js";
+import config from "./config.js";
 import mongo from "./db.js"
 import { get_local_ip } from "./util.js";
 
@@ -40,11 +40,11 @@ async function start_server() {
 
     fastify.get("/", async (_request, reply) => {
         const html = template.render_page_layout("landing");
-        reply.type("html").send(html);
+        reply.type("text/html").send(html);
     });
 
     fastify.get("/orders", async (_request, reply) => {
-        reply.type("html").send(template.render_page_layout("orders"));
+        reply.type("text/html").send(template.render_page_layout("orders"));
     });
 
     // TODO: This needs to move to web/dashboard (pretty much all of these need to move to their own handling thing)
@@ -61,15 +61,15 @@ async function start_server() {
         } catch (err: any) {
             throw make_http_error("Problem with db query: " + err.message, 500);
         }
-        reply.type("html").send(template.render_page_layout("dashboard", {first_name: name}));
+        reply.type("text/html").send(template.render_page_layout("dashboard", {first_name: name}));
     });
 
     fastify.get("/messages", async (_request, reply) => {
-        reply.type("html").send(template.render_page_layout("messages"));
+        reply.type("text/html").send(template.render_page_layout("messages"));
     });
 
     fastify.get("/settings", async (_request, reply) => {
-        reply.type("html").send(template.render_page_layout("settings"));
+        reply.type("text/html").send(template.render_page_layout("settings"));
     });
 
     fastify.get("/test-email", async (_request, _reply) => {
@@ -91,7 +91,7 @@ async function start_server() {
         if (is_http_error(err)) {
             reply
                 .status(err.status as number)
-                .type("html")
+                .type("text/html")
                 .send(create_err_resp(err));
         } else {
             elog("Unexpected error in request handler:", err);
@@ -100,7 +100,7 @@ async function start_server() {
 
     fastify.setNotFoundHandler((request, reply) => {
         const html = template.render_layout("404", { url: request.url });
-        reply.status(404).type("html").send(html);
+        reply.status(404).type("text/html").send(html);
     });
 
     try {
