@@ -10,7 +10,7 @@ async function handle_get_postimageurl(
 ) {
     const { id } = request.liuser as liuser_payload;
     const prefix = crypto.randomBytes(16).toString("hex");
-    const key = `${config.aws.s3_listing_pics_pf}/${id}/${prefix}`;
+    const key = `${config.aws.s3_tmp_pics_pf}/${id}/${prefix}`;
     const presigned = await aws.create_post_image_url(key);
     reply.send(presigned);
 }

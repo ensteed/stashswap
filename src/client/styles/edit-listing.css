@@ -118,6 +118,24 @@
     object-fit: cover;
 }
 
+.photo-thumb .progress {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  height: 6px;
+  background: rgba(0,0,0,0.4);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress .progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #ff0000;
+}
+
+
 .photos .photo-hint {
     padding: 0;
     font-size: 0.8em;

@@ -14,28 +14,99 @@ const DROP_AREAS: Record<string, drop_area_meta> = {
         input_element_id: "edit_listing_photo_upload_input",
         accepted_mime_types: new Set(["image/png", "image/jpeg", "image/webp"]),
         accepted_exts: new Set(["png", "webp", "jpeg", "jpg"]),
-        trigger: do_listing_attachments_upload
+        trigger: do_listing_attachments_upload,
     },
 };
+
+type presigned_post = {
+    url: string;
+    fields: Record<string, string>;
+};
+
+type progress_callback = (percent: number) => void;
+
+function upload_to_s3(aws_pp: presigned_post, file: File, on_progress: progress_callback) {
+    return new Promise((resolve, reject) => {
+        const form = new FormData();
+
+        // Append all presigned POST fields from your backend/AWS
+        for (const [key, value] of Object.entries(aws_pp.fields)) {
+            form.append(key, value);
+        }
+
+        // Must usually be last
+        //console.log(aws_pp.fields["Content-Type"]);
+        //form.append("Content-Type", file.type);
+        form.append("file", file);
+        console.log(`Should be setting content type to ${file.type}`);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", aws_pp.url, true);
+
+        function on_upload_progress(event: ProgressEvent<EventTarget>) {
+            if (event.lengthComputable) {
+                const percent = (event.loaded / event.total) * 100;
+                on_progress(percent);
+            }
+        }
+
+        function on_upload_finished() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.responseText);
+            } else {
+                reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
+            }
+        }
+
+        xhr.upload.onprogress = on_upload_progress;
+        xhr.onload = on_upload_finished;
+        xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.onabort = () => reject(new Error("Upload aborted"));
+
+        xhr.send(form);
+    });
+}
 
 async function do_listing_attachments_upload(files: FileList) {
     const thumb_cont = document.getElementById(PHOTO_THUMBS_ID);
     if (!thumb_cont) return;
     for (const file of files) {
         console.log("Listing attachment upload", file);
-        const url = await fetch("/api/upload/postimageurl");
-        if (url.ok) {
+        const res: Response = await fetch("/api/upload/postimageurl");
+        if (res.ok) {
+            const presign: presigned_post = await res.json();
+
             const div = document.createElement("div");
             div.className = "photo-thumb";
 
             const img = document.createElement("img");
             img.src = URL.createObjectURL(file);
 
+            const progress = document.createElement("div");
+            progress.className = "progress";
+
+            const progress_fill = document.createElement("div");
+            progress_fill.className = "progress-fill";
+            progress_fill.style.width = "10%";
+            progress.appendChild(progress_fill);
+
             div.appendChild(img);
+            div.appendChild(progress);
             thumb_cont.appendChild(div);
-        }
-        else {
-            console.log("Failed request", url);
+
+            function prog_func(percent: number) {
+                progress_fill.style.width = `${percent}%`;
+            }
+            try {
+                const upload_res = await upload_to_s3(presign, file, prog_func);
+                console.log("UPLOADED!");
+            }
+            catch(err: any) {
+                console.log(err);
+            }
+            
+        } else {
+            console.log("Failed request", res);
         }
     }
 }

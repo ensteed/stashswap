@@ -43,6 +43,9 @@ async function create_post_image_url(key: string) {
     const command: PresignedPostOptions = {
         Bucket: config.aws.s3_bucket,
         Key: key,
+        Fields: {
+            "Content-Type": "image/png"
+        },
         Conditions: [
             ["content-length-range", 0, 10 * 1024 * 1024],
             ["starts-with", "$Content-Type", "image/"],
@@ -50,8 +53,8 @@ async function create_post_image_url(key: string) {
         ],
         Expires: 60,
     };
-    const url = await createPresignedPost(s3, command);
-    return url;
+    const presigned_post = await createPresignedPost(s3, command);
+    return presigned_post;
 }
 
 const aws = {
