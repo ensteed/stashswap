@@ -1,10 +1,10 @@
-import {assert, get_event_element} from "./dom"
+import { assert, get_event_element } from "./dom";
 
 interface drop_area_meta {
     input_element_id: string;
     accepted_mime_types: Set<string>;
     accepted_exts: Set<string>;
-    trigger: (event: Event) => void;
+    trigger: (files: FileList) => void;
 }
 
 const DROP_AREAS: Record<string, drop_area_meta> = {
@@ -16,8 +16,11 @@ const DROP_AREAS: Record<string, drop_area_meta> = {
     },
 };
 
-function do_listing_attachments_upload(e: Event) {
-    console.log("Listing attachment upload called!");
+function do_listing_attachments_upload(files: FileList) {
+    for (const file of files) {
+        console.log("Listing attachment upload", file);
+        fetch("/api/")
+    }
 }
 
 function clear_drop_area_states() {
@@ -49,7 +52,6 @@ function are_drop_files_valid(da: drop_area_meta, files: FileList): boolean {
     return files.length > 0;
 }
 
-
 export function handle_drop_drop_areas(e: DragEvent) {
     const item = get_event_element(e.target);
     if (!item) return;
@@ -57,10 +59,7 @@ export function handle_drop_drop_areas(e: DragEvent) {
     if (!da || !e.dataTransfer?.files) return;
     const da_valid = are_drop_files_valid(da, e.dataTransfer.files);
     if (!da_valid) return;
-    const input_element = document.getElementById(da.input_element_id);
-    if (!input_element) return;
-    assert(input_element instanceof HTMLInputElement);
-    (input_element as HTMLInputElement).files = e.dataTransfer.files;
+    da.trigger(e.dataTransfer.files);
     clear_drop_area_states();
 }
 
@@ -71,7 +70,6 @@ export function handle_click_drop_areas(event: MouseEvent) {
     const input_elem = da ? document.getElementById(da.input_element_id) : null;
     if (input_elem) input_elem.click();
 }
-
 
 export function handle_dragover_drop_areas(e: DragEvent) {
     clear_drop_area_states();
@@ -94,12 +92,11 @@ export function handle_dragover_drop_areas(e: DragEvent) {
 }
 
 export function handle_change_drop_areas(e: Event) {
-    console.log("Got change");
-    const item = get_event_element(e.target);
+    const item = get_event_element(e.target) as HTMLInputElement;
     if (!item) return;
     for (const das of Object.values(DROP_AREAS)) {
-        if (das.input_element_id === item.id) {
-            das.trigger(e);
+        if (das.input_element_id === item.id && item.files) {
+            das.trigger(item.files);
             return;
         }
     }

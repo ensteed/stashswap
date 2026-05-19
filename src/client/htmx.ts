@@ -1,8 +1,8 @@
 import { get_event_element } from "./dom";
 import { fade_and_remove_item } from "./effects";
-import { show_modal_dialog_with_close } from "./modals";
+import { ROOT_MODAL_ELEMENT, show_modal_dialog_with_close } from "./modals";
 
-export function handle_htmx_load(event: Event, rootModalElementId: string) {
+export function handle_htmx_load(event: Event) {
     const target = get_event_element(event.target);
     if (!target) return;
 
@@ -11,7 +11,7 @@ export function handle_htmx_load(event: Event, rootModalElementId: string) {
     }
 
     const parent = target.parentElement;
-    if (parent && parent.id === rootModalElementId && target instanceof HTMLDialogElement) {
+    if (parent && parent.id === ROOT_MODAL_ELEMENT && target instanceof HTMLDialogElement) {
         show_modal_dialog_with_close(target, parent);
     }
 }

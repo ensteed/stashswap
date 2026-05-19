@@ -1,6 +1,6 @@
 import { get_dialog_by_id, get_event_element } from "./dom";
 
-const ROOT_MODAL_ELEMENT = "modal-root";
+export const ROOT_MODAL_ELEMENT = "modal-root";
 
 type modal_dialog = {
     id: string;
