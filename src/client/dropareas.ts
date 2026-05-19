@@ -1,5 +1,7 @@
 import { assert, get_event_element } from "./dom";
 
+const PHOTO_THUMBS_ID = "listing_photo_thumbs";
+
 interface drop_area_meta {
     input_element_id: string;
     accepted_mime_types: Set<string>;
@@ -16,10 +18,25 @@ const DROP_AREAS: Record<string, drop_area_meta> = {
     },
 };
 
-function do_listing_attachments_upload(files: FileList) {
+async function do_listing_attachments_upload(files: FileList) {
+    const thumb_cont = document.getElementById(PHOTO_THUMBS_ID);
+    if (!thumb_cont) return;
     for (const file of files) {
         console.log("Listing attachment upload", file);
-        fetch("/api/")
+        const url = await fetch("/api/upload/postimageurl");
+        if (url.ok) {
+            const div = document.createElement("div");
+            div.className = "photo-thumb";
+
+            const img = document.createElement("img");
+            img.src = URL.createObjectURL(file);
+
+            div.appendChild(img);
+            thumb_cont.appendChild(div);
+        }
+        else {
+            console.log("Failed request", url);
+        }
     }
 }
 

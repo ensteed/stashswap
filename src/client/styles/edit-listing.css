@@ -104,8 +104,18 @@
 }
 
 .photo-thumbs .photo-thumb {
-    padding: 1rem 0;
+    width: 6rem;
+    height: 6rem;
+    border-radius: 1rem;
+    border: 2px solid var(--color-primary);
+    overflow: hidden;
     margin: 0.25rem;
+}
+
+.photo-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .photos .photo-hint {
