@@ -26,7 +26,7 @@ async function upload_to_s3(key: string, data: Buffer, mimetype: string) {
     }
 }
 
-async function create_presigned_put_url(key: string, content_type: string) {
+async function create_put_url(key: string, content_type: string) {
     const command = new PutObjectCommand({
         Bucket: config.aws.s3_bucket,
         Key: key,
@@ -39,7 +39,7 @@ async function create_presigned_put_url(key: string, content_type: string) {
     return url;
 }
 
-async function create_presigned_post_url(key: string) {
+async function create_post_image_url(key: string) {
     const command: PresignedPostOptions = {
         Bucket: config.aws.s3_bucket,
         Key: key,
@@ -57,8 +57,8 @@ async function create_presigned_post_url(key: string) {
 const aws = {
     get_s3,
     upload_to_s3,
-    create_presigned_put_url,
-    create_presigned_post_url,
+    create_put_url,
+    create_post_image_url,
 };
 
 export default aws;
