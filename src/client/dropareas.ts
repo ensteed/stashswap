@@ -72,7 +72,9 @@ async function do_listing_attachments_upload(files: FileList) {
     if (!thumb_cont) return;
     for (const file of files) {
         console.log("Listing attachment upload", file);
-        const res: Response = await fetch("/api/upload/postimageurl");
+        const params = new URLSearchParams({type: file.type});
+        const url = `/api/upload/postimageurl?type=${params.toString()}`;
+        const res: Response = await fetch(url);
         if (res.ok) {
             const presign: presigned_post = await res.json();
 

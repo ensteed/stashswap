@@ -4,23 +4,18 @@ import crypto from "crypto";
 import aws from "../services/aws.js";
 import config from "../config.js";
 
-async function handle_get_postimageurl(
-    request: FastifyRequest,
-    reply: FastifyReply
-) {
+type query_params = { Querystring: { type: string } };
+
+async function handle_get_postimageurl(request: FastifyRequest<query_params>, reply: FastifyReply) {
     const { id } = request.liuser as liuser_payload;
     const prefix = crypto.randomBytes(16).toString("hex");
     const key = `${config.aws.s3_tmp_pics_pf}/${id}/${prefix}`;
-    const presigned = await aws.create_post_image_url(key);
+    const presigned = await aws.create_post_image_url(key, request.query.type);
     reply.send(presigned);
 }
 
 export function create_upload_api_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
-        fastify.get(
-            "/api/upload/postimageurl",
-            { preHandler: verify_liuser },
-            handle_get_postimageurl
-        );
+        fastify.get<query_params>("/api/upload/postimageurl", { preHandler: verify_liuser }, handle_get_postimageurl);
     };
 }

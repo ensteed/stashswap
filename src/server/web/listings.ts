@@ -68,7 +68,9 @@ async function get_listing(id: string, listings: Collection<ss_listing>): Promis
     }
 }
 
-async function handle_get_edit_listing_by_id(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+type route_params = { Params: { id: string } };
+
+async function handle_get_edit_listing_by_id(request: FastifyRequest<route_params>, reply: FastifyReply) {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
@@ -91,7 +93,7 @@ export function create_listing_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
         await fastify.register(fastifyMultipart, { limits: { fileSize: 4 * 1024 * 1024 } });
         fastify.post("/listings", { preHandler: verify_liuser }, handle_post_listing_draft);
-        fastify.get<{ Params: { id: string } }>(
+        fastify.get<route_params>(
             "/listings/:id/edit",
             { preHandler: verify_liuser, schema: GET_DRAFT_SCHEMA },
             handle_get_edit_listing_by_id
