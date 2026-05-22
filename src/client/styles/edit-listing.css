@@ -96,6 +96,12 @@
     color: var(--color-muted);
 }
 
+.photos .errors {
+    font-weight: 500;
+    font-size: 0.9em;
+    color: red;
+}
+
 .photos .photo-thumbs {
     display: flex;
     flex-wrap: wrap;
@@ -134,7 +140,6 @@
   width: 0%;
   background: #ff0000;
 }
-
 
 .photos .photo-hint {
     padding: 0;
