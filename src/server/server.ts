@@ -1,4 +1,5 @@
 import "./bootstrap.js";
+
 import Fastify from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyFormbody from "@fastify/formbody";

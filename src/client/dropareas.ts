@@ -1,6 +1,9 @@
-import { assert, get_event_element } from "./dom";
+import { get_event_element } from "./dom";
+import { http_error, make_http_error, rethrow_http_error, get_user_message_for_status, is_http_error } from "./error";
+import { fetch_json } from "./util";
 
 const PHOTO_THUMBS_ID = "listing_photo_thumbs";
+const PHOTO_THUMBS_ERRORS_ID = "listing_photo_errors";
 
 interface drop_area_meta {
     input_element_id: string;
@@ -25,7 +28,7 @@ type presigned_post = {
 
 type progress_callback = (percent: number) => void;
 
-function upload_to_s3(aws_pp: presigned_post, file: File, on_progress: progress_callback) {
+function upload_to_s3(aws_pp: presigned_post, file: File, on_progress: progress_callback): Promise<string> {
     return new Promise((resolve, reject) => {
         const form = new FormData();
 
@@ -67,48 +70,100 @@ function upload_to_s3(aws_pp: presigned_post, file: File, on_progress: progress_
     });
 }
 
+type temp_thumb_element = { container: HTMLElement; progress_fill: HTMLElement; presign: presigned_post; file: File };
+
+function add_temp_photo_div(
+    thumb_cont: HTMLElement,
+    presign: presigned_post,
+    file: File
+): temp_thumb_element {
+    const div = document.createElement("div");
+    div.className = "photo-thumb";
+
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(file);
+
+    const progress = document.createElement("div");
+    progress.className = "progress";
+
+    const progress_fill = document.createElement("div");
+    progress_fill.className = "progress-fill";
+    progress_fill.style.width = "10%";
+    progress.appendChild(progress_fill);
+
+    div.appendChild(img);
+    div.appendChild(progress);
+    thumb_cont.appendChild(div);
+    return { container: div, progress_fill, presign, file };
+}
+
+function add_error_element(err: Error | http_error, error_cont: HTMLElement) {
+
+    let msg: string;
+    if (is_http_error(err)) {
+        msg = get_user_message_for_status((err as http_error).status);
+    } else if (err instanceof SyntaxError) {
+        msg = "Server returned invalid data - please contact support.";
+    } else if (err instanceof TypeError) {
+        msg = "There was a network problem. Please try again.";
+    } else if (err instanceof DOMException && err.name === "AbortError") {
+        msg = "Upload request cancelled";
+    } else if (err instanceof Error) {
+        msg = "We couln't prepare your upload";
+    } else {
+        msg = "Unexpected error - please contact support.";
+    }
+    const err_element = document.createElement("p");
+    err_element.textContent = msg;
+    error_cont?.appendChild(err_element);
+}
+
+interface upload_result {
+    msg: string;
+    success: boolean;
+};
+
+async function upload_to_server(tmp_elem: temp_thumb_element): Promise<upload_result> {
+    const s3_result = await upload_to_s3(tmp_elem.presign, tmp_elem.file, (percent: number) => (tmp_elem.progress_fill.style.width = `${percent}`));
+    return {msg: s3_result, success: true};
+}
+
 async function do_listing_attachments_upload(files: FileList) {
     const thumb_cont = document.getElementById(PHOTO_THUMBS_ID);
-    if (!thumb_cont) return;
+    const error_cont = document.getElementById(PHOTO_THUMBS_ERRORS_ID);
+
+    if (!thumb_cont || !error_cont) return;
+    
+    const promises: Promise<string>[] = [];
+    const tmp_elements: temp_thumb_element[] = [];
     for (const file of files) {
-        console.log("Listing attachment upload", file);
-        const params = new URLSearchParams({type: file.type});
+        ilog("Listing attachment upload", file);
+        const params = new URLSearchParams({ type: file.type });
         const url = `/api/upload/postimageurl?type=${params.toString()}`;
-        const res: Response = await fetch(url);
-        if (res.ok) {
-            const presign: presigned_post = await res.json();
 
-            const div = document.createElement("div");
-            div.className = "photo-thumb";
+        try {
+            const presign: presigned_post = await fetch_json(url);
+            const tmp_elem: temp_thumb_element = add_temp_photo_div(thumb_cont, presign, file);
 
-            const img = document.createElement("img");
-            img.src = URL.createObjectURL(file);
-
-            const progress = document.createElement("div");
-            progress.className = "progress";
-
-            const progress_fill = document.createElement("div");
-            progress_fill.className = "progress-fill";
-            progress_fill.style.width = "10%";
-            progress.appendChild(progress_fill);
-
-            div.appendChild(img);
-            div.appendChild(progress);
-            thumb_cont.appendChild(div);
-
-            function prog_func(percent: number) {
-                progress_fill.style.width = `${percent}%`;
-            }
-            try {
-                const upload_res = await upload_to_s3(presign, file, prog_func);
-                console.log("UPLOADED!");
-            }
-            catch(err: any) {
-                console.log(err);
-            }
+            const prom = upload_to_s3(presign, file, (percent: number) => (tmp_elem.progress_fill.style.width = `${percent}`));
+            promises.push();
             
-        } else {
-            console.log("Failed request", res);
+        } catch (err: any) {
+            ilog(`Got fetch error for ${file.name} to ${url}:`, err);
+            add_error_element(err, error_cont);
+        }
+    }
+    
+    for (const tmp_element of tmp_elements) {
+        try {
+            const upload_res = await upload_to_s3(
+                tmp_element.presign,
+                tmp_element.file,
+                (percent: number) => (tmp_element.progress_fill.style.width = `${percent}`)
+            );
+            console.log("UPLOADED!");
+        } catch (err: any) {
+            console.log(err);
         }
     }
 }
