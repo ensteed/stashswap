@@ -1,5 +1,5 @@
 import { get_event_element } from "./dom";
-import { http_error, make_http_error, rethrow_http_error, get_user_message_for_status, is_http_error } from "./error";
+import { type http_error, get_user_message_for_status, is_http_error } from "./error";
 import { fetch_json } from "./util";
 
 const PHOTO_THUMBS_ID = "listing_photo_thumbs";
@@ -36,12 +36,7 @@ function upload_to_s3(aws_pp: presigned_post, file: File, on_progress: progress_
         for (const [key, value] of Object.entries(aws_pp.fields)) {
             form.append(key, value);
         }
-
-        // Must usually be last
-        //console.log(aws_pp.fields["Content-Type"]);
-        //form.append("Content-Type", file.type);
         form.append("file", file);
-        console.log(`Should be setting content type to ${file.type}`);
 
         const xhr = new XMLHttpRequest();
         xhr.open("POST", aws_pp.url, true);
@@ -72,11 +67,7 @@ function upload_to_s3(aws_pp: presigned_post, file: File, on_progress: progress_
 
 type temp_thumb_element = { container: HTMLElement; progress_fill: HTMLElement; presign: presigned_post; file: File };
 
-function add_temp_photo_div(
-    thumb_cont: HTMLElement,
-    presign: presigned_post,
-    file: File
-): temp_thumb_element {
+function add_temp_photo_div(thumb_cont: HTMLElement, presign: presigned_post, file: File): temp_thumb_element {
     const div = document.createElement("div");
     div.className = "photo-thumb";
 
@@ -98,7 +89,6 @@ function add_temp_photo_div(
 }
 
 function add_error_element(err: Error | http_error, error_cont: HTMLElement) {
-
     let msg: string;
     if (is_http_error(err)) {
         msg = get_user_message_for_status((err as http_error).status);
@@ -121,11 +111,22 @@ function add_error_element(err: Error | http_error, error_cont: HTMLElement) {
 interface upload_result {
     msg: string;
     success: boolean;
+}
+
+type upload_payload = {
+    key: string,
+    content_type: string,
+    orig_fname: string
 };
 
 async function upload_to_server(tmp_elem: temp_thumb_element): Promise<upload_result> {
-    const s3_result = await upload_to_s3(tmp_elem.presign, tmp_elem.file, (percent: number) => (tmp_elem.progress_fill.style.width = `${percent}`));
-    return {msg: s3_result, success: true};
+    const s3_result = await upload_to_s3(
+        tmp_elem.presign,
+        tmp_elem.file,
+        (percent: number) => (tmp_elem.progress_fill.style.width = `${percent}`)
+    );
+    ilog(`Got resonse ${s3_result}`);
+    return { msg: s3_result, success: true };
 }
 
 async function do_listing_attachments_upload(files: FileList) {
@@ -133,8 +134,8 @@ async function do_listing_attachments_upload(files: FileList) {
     const error_cont = document.getElementById(PHOTO_THUMBS_ERRORS_ID);
 
     if (!thumb_cont || !error_cont) return;
-    
-    const promises: Promise<string>[] = [];
+
+    const promises: Promise<upload_result>[] = [];
     const tmp_elements: temp_thumb_element[] = [];
     for (const file of files) {
         ilog("Listing attachment upload", file);
@@ -144,16 +145,14 @@ async function do_listing_attachments_upload(files: FileList) {
         try {
             const presign: presigned_post = await fetch_json(url);
             const tmp_elem: temp_thumb_element = add_temp_photo_div(thumb_cont, presign, file);
-
-            const prom = upload_to_s3(presign, file, (percent: number) => (tmp_elem.progress_fill.style.width = `${percent}`));
-            promises.push();
-            
+            const prom = upload_to_server(tmp_elem);
+            promises.push(prom);
         } catch (err: any) {
             ilog(`Got fetch error for ${file.name} to ${url}:`, err);
             add_error_element(err, error_cont);
         }
     }
-    
+
     for (const tmp_element of tmp_elements) {
         try {
             const upload_res = await upload_to_s3(

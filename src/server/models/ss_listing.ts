@@ -4,8 +4,8 @@ export type listing_condition = "new_original" | "new_wound" | "partial" | "used
 export type listing_status = "draft" | "active" | "sold" | "archived";
 
 export interface listing_photo {
-    url: string;
-    sortOrder: number;
+    aws_key: string;
+    sort_order: number;
     alt?: string;
 }
 

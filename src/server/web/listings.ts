@@ -89,6 +89,18 @@ async function handle_post_listing_draft(request: FastifyRequest, reply: Fastify
     reply.redirect(`/listings/${draft_listing._id}/edit`);
 }
 
+
+type patch_photo_req_data = { Params: { id: string }, Querystring: { key: string, content_type: string, orig_fname: string} };
+
+async function handle_patch_listing_photo(request: FastifyRequest<patch_photo_req_data>, reply: FastifyReply) {
+    const listings = mongo.get_listings();
+    const { id } = request.params;
+    const listing = await get_listing(id, listings);
+
+    const file = 
+}
+
+
 export function create_listing_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
         await fastify.register(fastifyMultipart, { limits: { fileSize: 4 * 1024 * 1024 } });

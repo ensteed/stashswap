@@ -49,5 +49,5 @@
         "**/.#*",
         "../../.emacs.d/backup/**/*"
     ],
-    "include": ["src/server/**/*.ts", "../../.emacs.d/backup/!home!dprandle!projects!stashswap!src!server!env.ts~", "../../.emacs.d/backup/!home!dprandle!projects!stashswap!src!server!logging.ts~"]
+    "include": ["src/server/**/*.ts"]
 }

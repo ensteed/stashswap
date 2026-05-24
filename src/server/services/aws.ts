@@ -1,6 +1,6 @@
 import config from "../config.js";
 import { make_http_error } from "../web/error.js";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createPresignedPost, type PresignedPostOptions } from "@aws-sdk/s3-presigned-post";
 
@@ -8,6 +8,20 @@ const s3 = new S3Client({ region: config.aws.s3_region });
 
 function get_s3(): S3Client {
     return s3;
+}
+
+async function download_s3(key: string) {
+    const cmd = new GetObjectCommand({
+        Bucket: config.aws.s3_bucket,
+        Key: key
+    });
+    try {
+        const result = await s3.send(cmd);
+        return await result.Body?.transformToByteArray();
+    }
+    catch(err: any) {
+        throw make_http_error(`S3 download failed: ${err.message}`, 500);
+    }
 }
 
 async function upload_to_s3(key: string, data: Buffer, mimetype: string) {
