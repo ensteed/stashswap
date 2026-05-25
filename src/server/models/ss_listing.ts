@@ -1,10 +1,15 @@
 export type yarn_weight = "lace" | "fingering" | "dk" | "worsted" | "bulky" | "super_bulky" | "unknown";
 
-export type listing_condition = "new_original" | "new_wound" | "partial" | "used" | "unknown";
-export type listing_status = "draft" | "active" | "sold" | "archived";
+export type ss_listing_condition = "new_original" | "new_wound" | "partial" | "used" | "unknown";
+export type ss_listing_status = "draft" | "active" | "sold" | "archived";
 
-export interface listing_photo {
-    aws_key: string;
+export interface ss_listing_photo {
+    id: string;
+    aws_keys: {
+        main: string;
+        card: string;
+        thumb: string;
+    };
     sort_order: number;
     alt?: string;
 }
@@ -16,7 +21,7 @@ export interface ss_listing {
     title: string;
     description: string;
     price: number;
-    status: listing_status;
+    status: ss_listing_status;
 
     brand?: string;
     yarn_name?: string;
@@ -24,9 +29,9 @@ export interface ss_listing {
     fiber?: string;
     weight?: yarn_weight;
     quantity?: number;
-    condition?: listing_condition;
+    condition?: ss_listing_condition;
 
-    photos: listing_photo[];
+    photos: ss_listing_photo[];
 
     created_at: Date;
     updated_at: Date;
