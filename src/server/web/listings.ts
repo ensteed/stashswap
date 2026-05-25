@@ -4,8 +4,12 @@ import { verify_liuser, type liuser_payload } from "./auth.js";
 import { make_http_error, rethrow_http_error } from "./error.js";
 import { Collection, ObjectId } from "mongodb";
 import mongo from "../db.js";
-import { type ss_listing } from "../models/ss_listing.js";
+import aws from "../services/aws.js";
+import { type ss_listing, type ss_listing_photo } from "../models/ss_listing.js";
 import template from "../template.js";
+import { sanitize_image, verify_buffer_is_image, ext_from_content_type } from "../util.js";
+import { randomUUID } from "crypto";
+import config from "../config.js";
 
 const GET_DRAFT_SCHEMA = {
     params: {
@@ -89,17 +93,135 @@ async function handle_post_listing_draft(request: FastifyRequest, reply: Fastify
     reply.redirect(`/listings/${draft_listing._id}/edit`);
 }
 
+function generate_photo_aws_key(listing_id: string, content_type: string): string {
+    return config.aws.s3_listing_pics_pf + "/" + listing_id + "." + ext_from_content_type(content_type);
+}
 
-type patch_photo_req_data = { Params: { id: string }, Querystring: { key: string, content_type: string, orig_fname: string} };
+type uploaded_photo_info = {
+    tmp_key: string,
+    orig_fname: string
+};
 
-async function handle_patch_listing_photo(request: FastifyRequest<patch_photo_req_data>, reply: FastifyReply) {
+type push_listing_body = {
+    photos_json: string
+};
+
+function is_uploaded_photo_info(val: unknown): val is uploaded_photo_info {
+    return (!!val && typeof val === "object" && )
+}
+
+
+async function handle_push_listing_photo(request: FastifyRequest<route_params>, reply: FastifyReply) {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
+    const parsed: unknown = request.body;
+    if (!Array.isArray(parsed) || parsed.every(val => val instanceof uploaded_photo_info)) {
+        
+    }
+    
+    const { file, content_type } = await aws.download_from_s3(request.query.key);
 
-    const file = 
+    // Remove image from aws - continue even if removal fails
+    try {
+        await aws.delete_from_s3(request.query.key);
+    } catch (err: any) {
+        const err_msg = err instanceof Error ? ":" + err.message : "";
+        elog(`Failed to delete temp upload ${request.query.key}${err_msg} - need to fix`);
+    }
+
+    if (!verify_buffer_is_image(Buffer.from(file))) {
+        // Return some error fragment
+    }
+
+    const proms: Promise<Buffer>[] = [];
+    const MAIN_PHOTO_IND = 0;
+    const CARD_PHOTO_IND = 1;
+    const THUMB_PHOTO_IND = 2;
+
+    const main = sanitize_image(file, 1600, 1600, { fit: "inside", withoutEnlargement: true });
+    proms[MAIN_PHOTO_IND]= main;
+
+    const card = sanitize_image(file, 400, 400, { fit: "cover", position: "centre", withoutEnlargement: true });
+    proms[CARD_PHOTO_IND] = (card);
+
+    const thumb = sanitize_image(file, 96, 96, { fit: "cover", position: "centre", withoutEnlargement: true });
+    proms[THUMB_PHOTO_IND] = thumb;
+
+    // allSettled only throws for things like syntax errors and such
+    const all_results = await Promise.allSettled(proms);
+
+    type data_key = { data: Buffer; key: string; content_type: string };
+
+    // Basically filter and map in one call to get our results to a list of only things that succeeded
+    const san_results = all_results.reduce<data_key[]>((acc, r) => {
+        if (r.status === "fulfilled") {
+            acc.push({ data: r.value, key: generate_photo_aws_key(listing._id, content_type), content_type });
+        }
+        return acc;
+    }, []);
+
+    // If all didn't succeed sanitizing then error
+    if (san_results.length !== all_results.length) {
+        // Return some error fragment
+    }
+
+    // Everything worked - lets do the upload
+    const upload_proms = san_results.map(async (r) => {
+        await aws.upload_to_s3(r.key, r.data, r.content_type);
+        return r.key;
+    });
+
+    const all_upload_results = await Promise.allSettled(upload_proms);
+    const uploads_succeeded = all_upload_results.reduce<string[]>((acc, r) => {
+        if (r.status === "fulfilled") {
+            acc.push(r.value);
+        }
+        return acc;
+    }, []);
+
+    // There's nothing more we can really do here other than log the failure
+    const delete_aws_keys = async (keys: string[]) => {
+        // Delete the successful uploads and return
+        const del_proms = keys.map((r) => aws.delete_from_s3(r));
+        const results = await Promise.allSettled(del_proms);
+        const failed = results.reduce<string[]>((arr, r) => {
+            if (r.status === "rejected") arr.push(r.reason);
+            return arr;
+        }, []);
+        if (failed.length > 0) elog(`Failed to delete the following photo keys: ${failed.join(", ")}`);
+    };
+
+    // If not all uploads succeeded, we need to delete the successful ones
+    if (uploads_succeeded.length !== all_upload_results.length) {
+        await delete_aws_keys(uploads_succeeded);
+        // Return some error fragment
+    }
+
+    // Finally, update the listing and save
+    const new_photo: ss_listing_photo = {
+        id: randomUUID(),
+        aws_keys: {
+            main: uploads_succeeded[MAIN_PHOTO_IND]!,
+            card: uploads_succeeded[CARD_PHOTO_IND]!,
+            thumb: uploads_succeeded[THUMB_PHOTO_IND]!
+        },
+        sort_order: request.query.order
+    };
+    
+    const result = await listings.updateOne(
+        { _id: listing._id },
+        {
+            $push: {
+                photos: new_photo
+            }
+        }
+    );
+    if (result.matchedCount === 0) {
+        // return error fragment
+    }
+    // return success fragment
 }
-
 
 export function create_listing_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {

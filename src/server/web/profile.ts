@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import fastifyMultipart from "@fastify/multipart";
 import { Collection, type UpdateResult, type UpdateFilter } from "mongodb";
-import sharp from "sharp";
-import aws from "../services/aws.js"
+import { sanitize_image, verify_buffer_is_image } from "../util.js";
+import aws from "../services/aws.js";
 import config from "../config.js";
 import template from "../template.js";
 import mongo from "../db.js";
@@ -10,20 +10,6 @@ import { verify_liuser, clear_user_session, type liuser_payload } from "./auth.j
 import { type ss_user } from "../models/ss_user.js";
 import { make_http_error, is_http_error } from "./error.js";
 import { amanifest } from "../assets.js";
-
-async function sanitize_profile_pic(file_buffer: Buffer) {
-    const sharp_img = sharp(file_buffer)
-        .rotate()
-        .resize(512, 512, { fit: "cover" })
-        .toFormat("webp", { quality: 80 })
-        .withMetadata({});
-    try {
-        const result = await sharp_img.toBuffer();
-        return result;
-    } catch (err: any) {
-        throw make_http_error("Error processing image: " + err.message, 500);
-    }
-}
 
 async function update_user(
     user_id: string,
@@ -41,13 +27,6 @@ async function upload_profile_pic_to_s3(user_id: string, data: Buffer) {
     const s3_key = config.aws.s3_profile_pics_pf + `${user_id}.webp`;
     const mime_type = "image/webp";
     await aws.upload_to_s3(s3_key, data, mime_type);
-}
-
-function verify_buffer_is_image(buf: Buffer): boolean {
-    const is_jpeg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
-    const is_png = buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    const is_riff = buf.subarray(0, 4).toString() === "RIFF" && buf.subarray(8, 12).toString() === "WEBP";
-    return is_jpeg || is_png || is_riff;
 }
 
 function create_upload_pfp_html(pfp_s3_key: string, err_msg: string | null): string {
@@ -79,6 +58,7 @@ async function get_logged_in_user(user_id: string, users: Collection<ss_user>) {
 }
 
 async function handle_get_edit_profile(request: FastifyRequest, reply: FastifyReply) {
+    reply.type("text/html");
     const users = mongo.get_users();
     const liusr = request.liuser as liuser_payload;
     const usr = await get_logged_in_user(liusr.id, users);
@@ -86,20 +66,19 @@ async function handle_get_edit_profile(request: FastifyRequest, reply: FastifyRe
         wlog(`User ${liusr.id} not found in db - likely removed while logged in`);
         clear_user_session(reply);
         reply.header("HX-Redirect", "/login");
-        reply.type("text/html").send("");
-        return;
+        return "";
     }
-
     const index_html = template.render_page_layout("edit-profile", {
         pfp_s3_key: usr.profile.pfp_s3_key,
         public_name: usr.profile.public_name,
         profile_about: usr.profile.about,
         default_pfp: amanifest.default_profile_pic,
     });
-    reply.type("text/html").send(index_html);
+    return index_html;
 }
 
 async function handle_post_profile_pic(request: FastifyRequest, reply: FastifyReply) {
+    reply.type("text/html");
     const users = mongo.get_users();
     const usr = request.liuser as liuser_payload;
     const default_pfp = "default.png";
@@ -115,28 +94,24 @@ async function handle_post_profile_pic(request: FastifyRequest, reply: FastifyRe
             throw new Error("Uploaded file is not a valid image");
         }
 
-        const data = await sanitize_profile_pic(buffer);
+        const data = await sanitize_image(buffer, 512, 512, { fit: "cover", withoutEnlargement: true });
 
         const pfp_s3_key = `${config.aws.s3_base_url}/${config.aws.s3_profile_pics_pf}/${usr.id}.webp`;
         const update_op = { $set: { "profile.pfp_s3_key": pfp_s3_key } };
         const result = await update_user(usr.id, update_op, users);
 
-        if (result.acknowledged && result.matchedCount == 1) {
-            await upload_profile_pic_to_s3(usr.id, data);
-            const html = create_upload_pfp_html(pfp_s3_key, null);
-            reply.type("text/html").send(html);
-        } else if (result.acknowledged) {
+        if (result.matchedCount === 0) {
             wlog(`User ${usr.id} not found in db - likely removed while logged in`);
             clear_user_session(reply);
             reply.header("HX-Redirect", "/login");
-            reply.type("text/html").send("");
-        } else {
-            throw make_http_error("Database update failed", 500);
+            return "";
         }
+
+        await upload_profile_pic_to_s3(usr.id, data);
+        return create_upload_pfp_html(pfp_s3_key, null);
     } catch (err: any) {
         if (!is_http_error(err)) {
-            const html = create_upload_pfp_html(default_pfp, err);
-            reply.type("text/html").send(html);
+            return create_upload_pfp_html(default_pfp, err);
         } else {
             throw err;
         }
@@ -144,6 +119,7 @@ async function handle_post_profile_pic(request: FastifyRequest, reply: FastifyRe
 }
 
 async function handle_post_profile(request: FastifyRequest, reply: FastifyReply) {
+    reply.type("text/html");
     const users = mongo.get_users();
     const usr = request.liuser as liuser_payload;
     const body = request.body as { public_name: string; about: string };
@@ -159,13 +135,12 @@ async function handle_post_profile(request: FastifyRequest, reply: FastifyReply)
 
     if (result.acknowledged && result.matchedCount == 1) {
         ilog(`Updated user ${usr.id} profile.public_name to ${public_name} and about to ${about}`);
-        const html = create_update_pfp_html(null);
-        reply.type("text/html").send(html);
+        return create_update_pfp_html(null);
     } else if (result.acknowledged) {
         wlog(`User ${usr.id} not found in db - likely removed while logged in`);
         clear_user_session(reply);
         reply.header("HX-Redirect", "/login");
-        reply.type("text/html").send("");
+        return "";
     } else {
         throw make_http_error("Database update failed", 500);
     }

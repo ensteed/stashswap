@@ -1,0 +1,3797 @@
+:PROPERTIES:
+:GPTEL_MODEL: gpt-5.4
+:GPTEL_BACKEND: OpenAI
+:GPTEL_SYSTEM: You are a large language model living in Emacs and a helpful assistant. Respond concisely.
+:GPTEL_TOOLS:
+:GPTEL_BOUNDS: ((response (2434 3403) (3454 4078) (4149 4840) (5301 6180) (6310 7224) (7280 8612) (9153 10502) (10591 11870) (11929 12904) (13037 14474) (14552 15602) (15729 17247) (17950 19504) (19623 20630) (20694 21494) (21575 22441) (22470 23471) (23539 23991) (24056 25110) (25245 26942) (27052 28017) (28193 28988) (29092 30137) (30187 31058) (31152 31586) (31682 32922) (32970 34323) (34488 35808) (35929 36767) (36807 37598) (37683 38594) (38610 38614) (38648 38674) (38684 38685) (38686 38702) (38733 38742) (38744 39393) (39460 40426) (40539 44677) (44769 45857) (45918 46271) (46333 46447) (46451 46461) (46472 46519) (46526 46531) (46541 46588) (46652 46697) (47228 49475) (49533 49828) (49915 50400) (50457 51073) (51201 52011) (52086 53039) (53612 55005) (55068 55726) (55792 56298) (56347 57094) (57168 57799) (57884 58495) (58675 59453) (59590 60295) (60387 61103) (61159 61624) (62554 62567) (62581 62656) (62670 62680) (62684 62803) (62817 62830) (62834 62952) (62967 62971) (62976 63085) (63103 63127) (63128 63140) (63141 63153) (63154 63175) (63176 63293) (63297 63307) (63318 63365) (63372 63377) (63387 63414) (63415 63435) (63500 63545) (65341 65386) (65390 65397) (65404 65405) (65408 65416) (65420 65430) (65434 65455) (65465 65485) (65489 65495) (65499 65501) (65505 65508) (66087 69769) (69870 70375) (70492 71732) (71833 73700) (73788 75844) (76176 78708) (78712 79582) (79735 81578) (81732 83016) (83898 86688) (87516 91908) (92059 93305) (93396 94713) (94841 95793) (95843 96729) (96807 98470) (98587 99228) (99273 99954) (100011 101764) (101799 102653) (102797 103678) (103718 104368) (104375 104743) (104842 105747) (105781 106613) (106649 107693) (107755 108353)))
+:END:
+
+*** What does result actually have in it?
+async function upload_to_s3(key: string, data: Buffer, mimetype: string) {
+    const cmd = new PutObjectCommand({
+        Bucket: config.aws.s3_bucket,
+        Key: key,
+        Body: data,
+        ContentType: mimetype,
+    });
+
+    try {
+        const result = await s3.send(cmd);
+        ilog(`Uploaded ${key} (${mimetype}) to bucket ${config.aws.s3_bucket} (${data.buffer.byteLength} bytes)`);
+    } catch (err: any) {
+        throw make_http_error("S3 upload failed: " + err.message, 500);
+    }
+}
+
+
+
+
+For =PutObjectCommand= in AWS SDK v3, =result= is the *PutObject response object* from S3.
+
+It usually contains metadata like:
+
+- =ETag= — entity tag for the uploaded object
+- =VersionId= — if bucket versioning is enabled
+- =ServerSideEncryption= — if SSE was used
+- =SSECustomerAlgorithm=
+- =SSECustomerKeyMD5=
+- =SSEKMSKeyId=
+- =BucketKeyEnabled=
+- =$metadata= — SDK response metadata like HTTP status code, request IDs, retries, etc.
+
+Typical shape:
+
+#+begin_src ts
+{
+  ETag?: string;
+  VersionId?: string;
+  ServerSideEncryption?: string;
+  SSEKMSKeyId?: string;
+  BucketKeyEnabled?: boolean;
+  $metadata: {
+    httpStatusCode?: number;
+    requestId?: string;
+    extendedRequestId?: string;
+    cfId?: string;
+    attempts?: number;
+    totalRetryDelay?: number;
+  };
+}
+#+end_src
+
+If you want to inspect it, do:
+
+#+begin_src ts
+const result = await s3.send(cmd);
+console.log(result);
+#+end_src
+
+If you want, I can also show the exact TypeScript type for =result=.
+
+*** Whay does metadata have a $ in front of it?
+
+Because =$metadata= is an SDK-internal field name chosen by AWS SDK v3 to avoid colliding with actual API response fields.
+
+The =$= prefix is just part of the property name. It signals “this is SDK bookkeeping,” not something returned by S3 as a normal service field like =ETag= or =VersionId=.
+
+It usually contains transport-level info such as:
+
+- HTTP status code
+- request ID
+- retry count
+- retry delay
+
+Example:
+
+#+begin_src ts
+result.$metadata.httpStatusCode
+#+end_src
+
+So:
+
+- =ETag= → real S3 response field
+- =$metadata= → extra SDK wrapper metadata
+
+It’s valid JavaScript/TypeScript; property names can contain =$=.
+
+*** Do people normally inspect what is returned from that function?
+
+Usually no.
+
+For =PutObject=, most people just await it to confirm success:
+
+#+begin_src ts
+await s3.send(cmd);
+#+end_src
+
+They inspect the result only if they need something specific, commonly:
+
+- =ETag=
+- =VersionId= if versioning is enabled
+- =$metadata.httpStatusCode= for debugging/logging
+- request IDs when troubleshooting AWS issues
+
+So in typical code, this is normal:
+
+#+begin_src ts
+await s3.send(cmd);
+#+end_src
+
+And this is only used when needed:
+
+#+begin_src ts
+const result = await s3.send(cmd);
+console.log(result.ETag, result.VersionId, result.$metadata);
+#+end_src
+
+In your function, if you don’t use =result=, you can omit it:
+
+#+begin_src ts
+await s3.send(cmd);
+#+end_src
+
+*** How about this result
+async function download_s3(key: string) {
+    const cmd = new GetObjectCommand({
+        Bucket: config.aws.s3_bucket,
+        Key: key
+    });
+    try {
+        const result = await s3.send(cmd);
+        return await result.Body?.transformToByteArray();
+    }
+    catch(err: any) {
+        throw make_http_error(`S3 download failed: ${err.message}`, 500);
+    }
+}
+
+Does the question mark mean body can possibly be null or missing?
+
+Yes.
+
+=result.Body?.transformToByteArray()= uses optional chaining, so it means =Body= might be =undefined= or =null=.
+
+If =Body= is missing, then:
+
+#+begin_src ts
+result.Body?.transformToByteArray()
+#+end_src
+
+evaluates to =undefined= instead of throwing.
+
+So this:
+
+#+begin_src ts
+return await result.Body?.transformToByteArray();
+#+end_src
+
+means the function may return:
+
+- a =Uint8Array= if =Body= exists
+- =undefined= if =Body= is missing
+
+For =GetObject=, =Body= is usually present when the object exists, but the TypeScript type allows it to be absent, so the =?= is the safe way to call it.
+
+If you want to enforce that it must exist, do:
+
+#+begin_src ts
+if (!result.Body) {
+    throw make_http_error("S3 returned no body", 500);
+}
+return await result.Body.transformToByteArray();
+#+end_src
+
+That is often clearer if your code expects the object data to always be there.
+
+*** What if the file isn't found on AWS, will the send call throw or return a result somehow indicating the file is not there?
+
+If the object doesn’t exist, =await s3.send(cmd)= will throw.
+
+For =GetObject=, S3 does not normally return a successful result with an empty/missing body to mean “not found.” Instead you get an error response, typically corresponding to “NoSuchKey”.
+
+So in your function:
+
+#+begin_src ts
+const result = await s3.send(cmd);
+#+end_src
+
+- object exists → returns result, usually with =Body=
+- object missing → throws, control goes to =catch=
+
+If you want to distinguish “not found” from other S3 errors, check the error in the catch block, e.g. by name:
+
+#+begin_src ts
+catch (err: any) {
+    if (err?.name === "NoSuchKey") {
+        throw make_http_error("File not found", 404);
+    }
+    throw make_http_error(`S3 download failed: ${err.message}`, 500);
+}
+#+end_src
+
+Sometimes people also inspect:
+
+- =err.name=
+- =err.Code=
+- =err.$metadata?.httpStatusCode=
+
+A 404 from S3 generally means the object wasn’t found.
+
+*** Wouldn't I want to do if (err instanceof Error)?
+
+Yes — if your goal is to safely access =err.message=, that’s better than blindly using =err: any=.
+
+Because in JS/TS, anything can be thrown, not just =Error= objects.
+
+A safer pattern is:
+
+#+begin_src ts
+catch (err: unknown) {
+    if (err instanceof Error) {
+        throw make_http_error(`S3 download failed: ${err.message}`, 500);
+    }
+    throw make_http_error("S3 download failed", 500);
+}
+#+end_src
+
+But for AWS specifically, if you also want to detect “not found,” you’ll usually inspect fields like =name=, which are not guaranteed by plain =Error=. So a practical version is:
+
+#+begin_src ts
+catch (err: unknown) {
+    if (err && typeof err === "object" && "name" in err) {
+        const name = String((err as any).name);
+        if (name === "NoSuchKey") {
+            throw make_http_error("File not found", 404);
+        }
+    }
+
+    if (err instanceof Error) {
+        throw make_http_error(`S3 download failed: ${err.message}`, 500);
+    }
+
+    throw make_http_error("S3 download failed", 500);
+}
+#+end_src
+
+So:
+
+- =err: any= → convenient but unsafe
+- =err: unknown= + narrowing → preferred TypeScript style
+- =instanceof Error= → good for accessing =message=
+- property checks like ="name" in err= → useful for AWS-specific error handling
+
+If you want, I can show the cleanest AWS SDK v3 TypeScript pattern for this.
+
+*** How do I default the type to webp here?
+async function sanitize_image(file_buffer: Buffer, w: number, h: number, fmt: AvailableFormatInfo = "webp", quality: number = 80) {
+    const sharp_img = sharp(file_buffer)
+        .rotate()
+        .resize(w, h, { fit: "cover" })
+        .toFormat(fmt, { quality: 80 })
+        .withMetadata({});
+    try {
+        const result = await sharp_img.toBuffer();
+        return result;
+    } catch (err: any) {
+        throw make_http_error("Error processing image: " + err.message, 500);
+    }
+}
+
+
+You likely want to default the /format parameter/ to the string literal ="webp"=, but only if the parameter’s type allows that literal.
+
+If =AvailableFormatInfo= is not itself the union of format names, then this is the wrong type.
+
+With =sharp=, the format argument to =toFormat()= is usually something like =keyof FormatEnum= / an available format string type, so this is more likely:
+
+#+begin_src ts
+async function sanitize_image(
+    file_buffer: Buffer,
+    w: number,
+    h: number,
+    fmt: keyof sharp.FormatEnum = "webp",
+    quality: number = 80
+) {
+    const sharp_img = sharp(file_buffer)
+        .rotate()
+        .resize(w, h, { fit: "cover" })
+        .toFormat(fmt, { quality })
+        .withMetadata({});
+
+    try {
+        return await sharp_img.toBuffer();
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            throw make_http_error("Error processing image: " + err.message, 500);
+        }
+        throw make_http_error("Error processing image", 500);
+    }
+}
+#+end_src
+
+Two notes:
+
+- You had =quality: 80= hardcoded inside =toFormat(...)=; probably you want =quality= there.
+- If your current type really is =AvailableFormatInfo=, check what it actually is. It sounds like an object/info type, not a format-name string type.
+
+If you want, I can help identify the exact sharp type you should use for =fmt=.
+
+*** Should s3 download function return the int8 byte array or return a buffer object?
+
+Usually return a =Buffer= in Node.js.
+
+Why:
+
+- your input/output code already uses =Buffer=
+- many Node APIs expect =Buffer=
+- =Buffer= is a subclass of =Uint8Array=, so it’s easy to convert from the S3 result
+
+So I’d write:
+
+#+begin_src ts
+async function download_s3(key: string): Promise<Buffer> {
+    const cmd = new GetObjectCommand({
+        Bucket: config.aws.s3_bucket,
+        Key: key,
+    });
+
+    try {
+        const result = await s3.send(cmd);
+
+        if (!result.Body) {
+            throw make_http_error("S3 returned no body", 500);
+        }
+
+        const bytes = await result.Body.transformToByteArray();
+        return Buffer.from(bytes);
+    } catch (err: unknown) {
+        if (err && typeof err === "object" && "name" in err) {
+            if (String((err as any).name) === "NoSuchKey") {
+                throw make_http_error("File not found", 404);
+            }
+        }
+
+        if (err instanceof Error) {
+            throw make_http_error(`S3 download failed: ${err.message}`, 500);
+        }
+
+        throw make_http_error("S3 download failed", 500);
+    }
+}
+#+end_src
+
+Use =Uint8Array= only if you want the function to stay more generic or runtime-neutral.
+
+Rule of thumb:
+
+- Node app code → =Buffer=
+- browser/shared low-level code → =Uint8Array=
+
+*** Is converting the Uint8Array to a buffer expensive?
+
+Not very, and often effectively negligible compared to the network download.
+
+If you do:
+
+#+begin_src ts
+const bytes = await result.Body.transformToByteArray();
+const buf = Buffer.from(bytes);
+#+end_src
+
+then =Buffer.from(Uint8Array)= generally creates a Buffer view/copy based on the typed array data. In practice, for normal app code, this cost is usually small relative to:
+
+- S3 network latency
+- downloading the object
+- image/file processing afterward
+
+If the objects are large and you care a lot about memory/copying behavior, then yes, it can matter.
+
+A slightly more explicit way to avoid copying the underlying memory is:
+
+#+begin_src ts
+const bytes = await result.Body.transformToByteArray();
+const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+#+end_src
+
+That reuses the same underlying ArrayBuffer.
+
+So:
+
+- for most code: don’t worry about it
+- if performance/memory is sensitive: use the 3-argument =Buffer.from(...)= form to share memory
+
+*** If I'm letting users upload custom images for listing - should I leave them in their original dimensions and just check size?
+
+No — usually you should normalize them, not keep arbitrary originals for app use.
+
+Typical approach:
+
+- validate file type
+- enforce max upload size
+- decode and re-encode the image
+- strip dangerous/unneeded metadata
+- constrain max dimensions
+- optionally generate a few standard sizes
+- store in a standard format like webp/jpeg/png depending on your needs
+
+Why not keep original dimensions only:
+
+- users may upload huge images like 8000×6000
+- large dimensions waste storage, bandwidth, and processing
+- inconsistent dimensions complicate UI
+- re-encoding helps defeat malformed/polyglot uploads
+- EXIF orientation can make originals display oddly unless normalized
+
+A common practical pattern for listing images:
+
+- keep one “master normalized” image with a max dimension, e.g. 1600–2400 px on the long side
+- generate thumbnails, e.g. 400 px and 800 px
+- convert photos to webp or jpeg
+- preserve png only if transparency matters
+
+Example policy:
+
+- max upload bytes: e.g. 10 MB
+- max accepted dimensions before resize: anything, but resize down to max 2000 px
+- strip metadata except maybe orientation handled during rotate
+- quality around 75–85
+- reject absurdly large pixel counts
+
+So for listing photos, I would generally /not/ store arbitrary original dimensions as the primary asset.
+
+If you really want originals, store them separately as archival originals, but still generate normalized versions for actual app delivery.
+
+*** what if the user uploads say, 1024 by 700? What should I do with that?
+
+Usually: keep the aspect ratio, don’t force it to a fixed size, and don’t upscale.
+
+So for 1024×700:
+
+- if it is under your max dimensions, you can keep it as-is
+- optionally re-encode/normalize it anyway
+- generate thumbnails from it
+
+Good default policy for listing images:
+
+- auto-rotate based on EXIF
+- strip metadata
+- re-encode to your chosen format
+- resize only if larger than your max, e.g. long side > 1600 or 2000 px
+- never upscale smaller images
+
+So 1024×700 is probably fine to leave at 1024×700, just normalized.
+
+With =sharp= that usually means using =withoutEnlargement: true= and a bounding box rather than hard crop:
+
+#+begin_src ts
+sharp(file_buffer)
+  .rotate()
+  .resize(1600, 1600, {
+    fit: "inside",
+    withoutEnlargement: true,
+  })
+  .webp({ quality: 80 })
+#+end_src
+
+That way:
+
+- 3000×2000 -> shrunk down
+- 1024×700 -> unchanged dimensions
+- aspect ratio preserved
+
+Only use =fit: "cover"= when you intentionally want a fixed-size cropped thumbnail. For main listing images, =fit: "inside"= is usually the better choice.
+
+*** So I should generate the original, then a smaller thumbnail.. what what you suggest for the thumbnail sharp conversion?
+
+Yes: store a normalized main image, plus a thumbnail.
+
+For the thumbnail, I’d usually suggest:
+
+- fixed box size
+- =fit: "cover"= so all thumbnails are uniform
+- =position: "centre"= or maybe =entropy/attention= if you want smart cropping
+- =withoutEnlargement: true= if you don’t want tiny images upscaled
+- convert to =webp= with moderate quality
+
+Example:
+
+#+begin_src ts
+async function make_thumbnail(file_buffer: Buffer): Promise<Buffer> {
+    try {
+        return await sharp(file_buffer)
+            .rotate()
+            .resize(400, 400, {
+                fit: "cover",
+                position: "centre",
+                withoutEnlargement: true,
+            })
+            .webp({ quality: 80 })
+            .toBuffer();
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            throw make_http_error("Error creating thumbnail: " + err.message, 500);
+        }
+        throw make_http_error("Error creating thumbnail", 500);
+    }
+}
+#+end_src
+
+Recommended sizes:
+
+- thumbnail grid: 300×300 or 400×400
+- medium preview: 800px wide or within 800×800 using =fit: "inside"=
+- main image: max 1600–2000 px long side using =fit: "inside"=
+
+A common setup:
+
+- main image: preserve aspect ratio, resize down only
+- thumbnail: square crop for consistency
+
+So I’d pair:
+
+- main: =resize(1600, 1600, { fit: "inside", withoutEnlargement: true })=
+- thumb: =resize(400, 400, { fit: "cover", position: "centre", withoutEnlargement: true })=
+
+If you want, I can write both functions in a matching style.
+
+***
+What if I want this function
+export async function sanitize_image(
+    file_buffer: Buffer,
+    w: number,
+    h: number,
+    fit: keyof FitEnum,
+    withoutEnlargement: boolean,
+    fmt: keyof FormatEnum = "webp",
+    quality: number = 80
+) {
+    const sharp_img = sharp(file_buffer)
+        .rotate()
+        .resize(w, h, { fit, withoutEnlargement })
+        .toFormat(fmt, { quality: quality })
+        .withMetadata({});
+    try {
+        const result = await sharp_img.toBuffer();
+        return result;
+    } catch (err: any) {
+        throw make_http_error("Error processing image: " + err.message, 500);
+    }
+}
+
+To be able to accept all opts for resize - what is that opts type called?
+
+Use Sharp’s resize options type: =ResizeOptions=.
+
+So the function would look like:
+
+#+begin_src ts
+import sharp, { FormatEnum, ResizeOptions } from "sharp";
+
+export async function sanitize_image(
+    file_buffer: Buffer,
+    resize_opts: ResizeOptions,
+    fmt: keyof FormatEnum = "webp",
+    quality: number = 80
+): Promise<Buffer> {
+    try {
+        return await sharp(file_buffer)
+            .rotate()
+            .resize(resize_opts)
+            .toFormat(fmt, { quality })
+            .withMetadata({})
+            .toBuffer();
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            throw make_http_error("Error processing image: " + err.message, 500);
+        }
+        throw make_http_error("Error processing image", 500);
+    }
+}
+#+end_src
+
+Or if you want to keep =w= and =h= separate:
+
+#+begin_src ts
+export async function sanitize_image(
+    file_buffer: Buffer,
+    w: number | null,
+    h: number | null,
+    resize_opts: ResizeOptions = {},
+    fmt: keyof FormatEnum = "webp",
+    quality: number = 80
+): Promise<Buffer> {
+    try {
+        return await sharp(file_buffer)
+            .rotate()
+            .resize(w, h, resize_opts)
+            .toFormat(fmt, { quality })
+            .withMetadata({})
+            .toBuffer();
+    } catch (err: unknown) {
+        if (err instanceof Error) {
+            throw make_http_error("Error processing image: " + err.message, 500);
+        }
+        throw make_http_error("Error processing image", 500);
+    }
+}
+#+end_src
+
+The key type name you want is:
+
+- =ResizeOptions=
+
+*** When using allSettled, is a single promise returned? Where is the array of results for each individual promise?
+
+Yes. =Promise.allSettled(...)= returns a /single promise/.
+
+That single promise resolves to an /array/ containing one result object per input promise, in the same order as the input.
+
+Example:
+
+#+begin_src ts
+const results = await Promise.allSettled([
+    Promise.resolve(1),
+    Promise.reject(new Error("oops")),
+    Promise.resolve(3),
+]);
+
+console.log(results);
+#+end_src
+
+=result= shape:
+
+#+begin_src ts
+[
+  { status: "fulfilled", value: 1 },
+  { status: "rejected", reason: Error("oops") },
+  { status: "fulfilled", value: 3 }
+]
+#+end_src
+
+So:
+
+- return value of =Promise.allSettled(...)= → one promise
+- resolved value of that promise → array of per-promise outcomes
+
+Typical use:
+
+#+begin_src ts
+const results = await Promise.allSettled(tasks);
+
+for (const r of results) {
+    if (r.status === "fulfilled") {
+        console.log(r.value);
+    } else {
+        console.error(r.reason);
+    }
+}
+#+end_src
+
+The individual results are not emitted separately; they’re all collected into that final array.
+
+*** Will the promise returned from allSettled itself reject?
+
+No, not because one of the input promises rejects.
+
+=Promise.allSettled(...)= always waits for all input promises to settle and then /resolves/ with the results array.
+
+So this does /not/ make the outer promise reject:
+
+#+begin_src ts
+await Promise.allSettled([
+    Promise.resolve(1),
+    Promise.reject(new Error("fail")),
+]);
+#+end_src
+
+It resolves to something like:
+
+#+begin_src ts
+[
+  { status: "fulfilled", value: 1 },
+  { status: "rejected", reason: Error("fail") }
+]
+#+end_src
+
+The outer promise would only reject in unusual cases, like:
+
+- you pass something broken/invalid that throws while being iterated
+- constructing/reading the input iterable throws synchronously
+
+But under normal use, rejected inner promises become:
+
+- ={ status: "rejected", reason: ... }=
+
+not an outer rejection.
+
+*** Okay so I can away on Promise.allSettled without enclosing in a try block
+
+Usually yes.
+
+For normal usage, you can =await Promise.allSettled(...)= without a =try= block, because rejected inner promises are turned into result objects, not thrown.
+
+Example:
+
+#+begin_src ts
+const results = await Promise.allSettled(tasks);
+#+end_src
+
+Then inspect each result:
+
+#+begin_src ts
+for (const r of results) {
+    if (r.status === "fulfilled") {
+        // use r.value
+    } else {
+        // handle r.reason
+    }
+}
+#+end_src
+
+That said, strictly speaking, the outer call /can/ still throw in unusual cases, such as:
+
+- building =tasks= throws before =allSettled= is called
+- the iterable passed to =allSettled= throws while being iterated
+
+So:
+
+- normal promise rejections from tasks → no =try= needed for =allSettled= itself
+- surrounding code may still justify a =try= if other things can throw
+
+Also: you wrote “away”; I think you meant “await”.
+
+*** What type is results?
+
+It’s an array of settled-result objects:
+
+#+begin_src ts
+PromiseSettledResult<T>[]
+#+end_src
+
+where =T= is the resolved type of the input promises.
+
+Example: if your promises are =Promise<Buffer>=, then:
+
+#+begin_src ts
+const results: PromiseSettledResult<Buffer>[] = await Promise.allSettled(tasks);
+#+end_src
+
+Each element is one of:
+
+- =PromiseFulfilledResult<T>=
+- =PromiseRejectedResult=
+
+So:
+
+#+begin_src ts
+type PromiseSettledResult<T> =
+    | PromiseFulfilledResult<T>
+    | PromiseRejectedResult;
+#+end_src
+
+With narrowing:
+
+#+begin_src ts
+for (const r of results) {
+    if (r.status === "fulfilled") {
+        // r is PromiseFulfilledResult<Buffer>
+        const value = r.value;
+    } else {
+        // r is PromiseRejectedResult
+        const reason = r.reason;
+    }
+}
+#+end_src
+
+If you pass a tuple of different promise types, TypeScript can infer a tuple of corresponding settled result types, but for a normal homogeneous array it’s:
+
+#+begin_src ts
+PromiseSettledResult<T>[]
+#+end_src
+
+*** Is there a quick way to check if all fulfilled in the array?
+
+Yes:
+
+#+begin_src ts
+const allFulfilled = results.every(r => r.status === "fulfilled");
+#+end_src
+
+That gives you a boolean.
+
+Similarly, if you want any failures:
+
+#+begin_src ts
+const anyRejected = results.some(r => r.status === "rejected");
+#+end_src
+
+If you also want just the fulfilled values:
+
+#+begin_src ts
+const values = results
+    .filter((r): r is PromiseFulfilledResult<Buffer> => r.status === "fulfilled")
+    .map(r => r.value);
+#+end_src
+
+*** Can we get the content-type from the downloaded aws data?
+
+Yes.
+
+For =GetObject=, the response can include =ContentType=, along with other metadata.
+
+Example:
+
+#+begin_src ts
+const result = await s3.send(cmd);
+
+console.log(result.ContentType);
+#+end_src
+
+So in your download function, you could return both the bytes and content type:
+
+#+begin_src ts
+async function download_s3(key: string): Promise<{ data: Buffer; contentType?: string }> {
+    const cmd = new GetObjectCommand({
+        Bucket: config.aws.s3_bucket,
+        Key: key,
+    });
+
+    const result = await s3.send(cmd);
+
+    if (!result.Body) {
+        throw make_http_error("S3 returned no body", 500);
+    }
+
+    const bytes = await result.Body.transformToByteArray();
+
+    return {
+        data: Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+        contentType: result.ContentType,
+    };
+}
+#+end_src
+
+Other useful fields you may also get:
+
+- =ContentLength=
+- =ETag=
+- =LastModified=
+- =Metadata= (custom user metadata)
+
+So yes: content type is part of the S3 response metadata, not something you have to infer from the bytes.
+
+*** Should the user specifically fill in alt text? Or how should I get that info? Should I do anything with the original file name?
+
+Yes: let the user provide alt text, but don’t require it for every listing image unless the image conveys important info not already present in surrounding text.
+
+Practical approach:
+
+- have an optional alt text field per image
+- if the image is informative, encourage/favor meaningful alt text
+- if the image is purely decorative, store alt as empty string =""=
+- don’t auto-use the filename as alt text
+
+Why not filename as alt text:
+
+- filenames are usually bad accessibility text
+- they often contain junk, IDs, dashes, extensions
+- screen readers reading =img_3029-final.webp= is not useful
+
+Better sources for alt text:
+
+- user-entered description: “Front view of oak dining table”
+- maybe a suggested default based on listing title + image role, e.g. “Photo of oak dining table”
+- but let the user edit it
+
+Good UX:
+
+- image upload
+- optional “Describe this image” field
+- helper text like: “Include important visual details not already obvious from the listing.”
+
+For listing photos, alt text can often be simple:
+
+- “Front of the bicycle”
+- “Kitchen with island and stainless steel appliances”
+- “Side view of the sofa”
+
+About original filename:
+
+Usually:
+
+- keep it only as non-public metadata if useful
+- sanitize it before storing
+- do not rely on it for display, alt text, or object keys
+
+It can be useful for:
+
+- showing user “you uploaded foo.jpg”
+- debugging
+- deriving extension/type hints before normalization
+
+But for storage, prefer your own generated key, e.g. UUID-based.
+
+So my recommendation:
+
+- alt text: user-provided, optional but encouraged
+- filename: keep only as internal metadata if you want
+- don’t use filename as alt text
+- generate your own S3 object names/keys
+
+*** Why include an explicit order field on images rather than just relying on their position in the array?
+
+Because array position is often only reliable /in memory/, not across storage, updates, and queries.
+
+An explicit =order= field is usually better if images are stored as separate DB records.
+
+Why:
+
+- DB queries do not guarantee order unless you =ORDER BY=
+- inserting/removing/reordering images is easier to persist explicitly
+- different APIs/joins/serializations may return records in different orders
+- you may want stable ordering independent of creation time or ID
+- drag-and-drop UI usually maps naturally to an =order= column
+
+Example:
+
+#+begin_src ts
+images: [
+  { id: "a", order: 0, url: "..." },
+  { id: "b", order: 1, url: "..." }
+]
+#+end_src
+
+Then query with something like:
+
+#+begin_src sql
+ORDER BY image_order ASC
+#+end_src
+
+If images are literally stored as a single JSON array on the parent record and always written/read as one blob, array order may be enough.
+
+But if images are separate rows/documents, explicit order is the normal safer design.
+
+*** They are not separate rows/documents, but they are patched individually to the record async from the browser... so i guess probably good idea to not rely on array order
+
+Yes — in that case, an explicit =order= field is a good idea.
+
+Because if images are patched individually and asynchronously from the browser, relying on array position can get fragile:
+
+- uploads may finish in a different order than selected
+- concurrent patches can overwrite array ordering
+- retrying one upload may reshuffle things unintentionally
+- merging partial updates is harder if order only exists implicitly in array position
+
+An explicit field gives you stable intent:
+
+#+begin_src ts
+type ListingImage = {
+  id: string;
+  order: number;
+  url: string;
+  alt?: string;
+};
+#+end_src
+
+Then you can:
+
+- upload/save each image independently
+- preserve the intended display order
+- sort by =order= when reading/rendering
+
+So yes, for your setup, I would /not/ rely purely on array order.
+
+*** Why id? they are array elements in a mongo db listing document, and instead of url it is aws_key
+
+You don’t strictly need an =id= if the array elements only ever live inside that one listing document and you always address them by index.
+
+But having an =id= is still useful, especially if items are updated asynchronously.
+
+Why an =id= helps:
+
+- array index is unstable if items are reordered or deleted
+- async updates from the browser can target the wrong element if based on index
+- React/UI lists usually want a stable key
+- it’s easier to say “update image X” than “update whatever is currently at index 2”
+- drag/drop reorder and retries are safer with stable identity
+
+So even inside one Mongo document, this is often better:
+
+#+begin_src ts
+type ListingImage = {
+  id: string;
+  aws_key: string;
+  order: number;
+  alt?: string;
+};
+#+end_src
+
+instead of relying on:
+
+#+begin_src ts
+images[2]
+#+end_src
+
+because index 2 may stop meaning the same image later.
+
+If your workflow is truly simple and images are always rewritten as a whole array, you can skip =id=. But with async per-image patching, I’d strongly lean toward including one.
+
+*** But can't i just use the aws key as the id
+
+Yes — you often can, as long as it is stable and unique per image.
+
+If each image gets its own permanent =aws_key=, then using that as the identifier is perfectly reasonable.
+
+That means your image object could just be:
+
+#+begin_src ts
+type ListingImage = {
+  aws_key: string;
+  order: number;
+  alt?: string;
+};
+#+end_src
+
+Why this works:
+
+- unique within the listing
+- stable across reordering
+- already needed to fetch/delete the image
+- avoids storing two identifiers when one is enough
+
+Possible downside:
+
+- if you ever want to replace the underlying S3 object but keep the “same image record,” then =aws_key= is no longer a great identity field
+- storage identity and app identity are conceptually different
+
+But if in your app “this image” /is/ the S3 object, then using =aws_key= as the ID is fine and common enough.
+
+So: yes, for your case, probably reasonable.
+
+*** Back to the promises array - how do I get the data of an indivual result in the array?
+
+Check its =status= first.
+
+Example:
+
+#+begin_src ts
+const results = await Promise.allSettled(tasks);
+
+const r = results[0];
+
+if (r.status === "fulfilled") {
+    const data = r.value;
+    console.log(data);
+} else {
+    console.error(r.reason);
+}
+#+end_src
+
+For an individual result:
+
+- fulfilled → data is in =result.value=
+- rejected → error is in =result.reason=
+
+So there is no single common “data” field; it depends on the status.
+
+*** Is there a command to upload multiple documents at once with s3 and only if all succeed?
+
+No. S3 doesn’t have an atomic “upload these multiple objects as one transaction” operation.
+
+If you upload multiple objects:
+
+- each =PutObject= succeeds or fails independently
+- there is no built-in “all succeed or all roll back”
+
+So if you need all-or-nothing behavior, you have to implement it at the app level.
+
+Common patterns:
+
+1. Upload all, then commit in DB
+- upload objects to temporary/final keys
+- if all uploads succeed, save references in your DB
+- if any fail, delete the ones that already uploaded
+
+2. Staging/pending prefix
+- upload to something like =pending/...=
+- only mark them as active in your DB when all succeed
+- optionally move/copy them afterward (or just keep them there)
+
+3. Compensating cleanup
+- use =Promise.allSettled=
+- if any reject, delete successful uploads
+
+Example shape:
+
+#+begin_src ts
+const results = await Promise.allSettled(uploadPromises);
+
+const allFulfilled = results.every(r => r.status === "fulfilled");
+
+if (!allFulfilled) {
+    await Promise.allSettled(successfulKeys.map(deleteFromS3));
+    throw make_http_error("One or more uploads failed", 500);
+}
+#+end_src
+
+So:
+
+- multiple upload command with atomic success? no
+- app-level “all succeed or clean up”? yes, that’s the normal approach
+
+*** Okay but where is successfulKeys filled?
+
+You fill it yourself as you create the uploads, or derive it from the settled results afterward.
+
+Two common ways.
+
+1. Keep the key alongside each promise up front
+
+#+begin_src ts
+const uploads = files.map(file => {
+    const key = make_s3_key(file);
+    return {
+        key,
+        promise: upload_to_s3(key, file.data, file.mimetype),
+    };
+});
+
+const results = await Promise.allSettled(uploads.map(u => u.promise));
+
+const successfulKeys = results
+    .map((r, i) => ({ result: r, key: uploads[i].key }))
+    .filter(x => x.result.status === "fulfilled")
+    .map(x => x.key);
+#+end_src
+
+Then if any failed:
+
+#+begin_src ts
+if (results.some(r => r.status === "rejected")) {
+    await Promise.allSettled(successfulKeys.map(key => delete_s3(key)));
+}
+#+end_src
+
+2. Make each upload promise resolve with the key
+
+#+begin_src ts
+const uploadPromises = files.map(async file => {
+    const key = make_s3_key(file);
+    await upload_to_s3(key, file.data, file.mimetype);
+    return key;
+});
+
+const results = await Promise.allSettled(uploadPromises);
+
+const successfulKeys = results
+    .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+    .map(r => r.value);
+#+end_src
+
+In that version, each fulfilled result’s =value= is the uploaded key.
+
+That second pattern is often the cleanest if you want the successful keys afterward.
+
+*** I hate your constant usage of map and some and filter to make all the syntax look "nice". It makes it so much more confusing to reason about what is going on
+
+Fair. A plain loop is often clearer.
+
+Here’s the same =allSettled= cleanup approach without chaining array methods:
+
+#+begin_src ts
+const uploadPromises: Promise<string>[] = [];
+
+for (const file of files) {
+    const key = make_s3_key(file);
+
+    const p = (async () => {
+        await upload_to_s3(key, file.data, file.mimetype);
+        return key;
+    })();
+
+    uploadPromises.push(p);
+}
+
+const results = await Promise.allSettled(uploadPromises);
+
+const successfulKeys: string[] = [];
+let hadFailure = false;
+
+for (const result of results) {
+    if (result.status === "fulfilled") {
+        successfulKeys.push(result.value);
+    } else {
+        hadFailure = true;
+    }
+}
+
+if (hadFailure) {
+    const deletePromises: Promise<void>[] = [];
+
+    for (const key of successfulKeys) {
+        deletePromises.push(delete_s3(key));
+    }
+
+    await Promise.allSettled(deletePromises);
+    throw make_http_error("One or more uploads failed", 500);
+}
+#+end_src
+
+What’s happening:
+
+- each upload promise returns its =key= on success
+- =allSettled= waits for all uploads
+- loop over results
+  - if success, save the key
+  - if failure, mark that there was a failure
+- if any failed, delete the successful uploads
+
+That’s the same logic, just spelled out.
+
+If you want, I can keep using this more explicit style going forward.
+
+*** Is there a way to map and filter at the same time? IE filter but if the predicate is met also transform the item?
+
+Yes, but JS doesn’t have a built-in single method exactly for that.
+
+Common options:
+
+1. Plain loop — clearest
+
+#+begin_src ts
+const out: string[] = [];
+
+for (const r of results) {
+    if (r.status === "fulfilled") {
+        out.push(r.value);
+    }
+}
+#+end_src
+
+2. =reduce= — combines filter + map, but many people find it less readable
+
+#+begin_src ts
+const out = results.reduce<string[]>((acc, r) => {
+    if (r.status === "fulfilled") {
+        acc.push(r.value);
+    }
+    return acc;
+}, []);
+#+end_src
+
+3. =flatMap= — can act like filter + map together
+
+#+begin_src ts
+const out = results.flatMap(r => {
+    if (r.status === "fulfilled") {
+        return [r.value];
+    }
+    return [];
+});
+#+end_src
+
+So yes, =flatMap= is the closest built-in “filter and transform at once,” but honestly, for clarity, a plain loop is often better.
+
+*** what about filter(bla).map(bla)?
+
+Yes, that’s totally normal.
+
+#+begin_src ts
+const out = results
+    .filter(r => r.status === "fulfilled")
+    .map(r => r.value);
+#+end_src
+
+Conceptually:
+
+- =filter(...)= keeps only the items you want
+- =map(...)= transforms those kept items
+
+That said, in TypeScript, this specific example often needs a /type predicate/ so TS knows that after filtering, each item is a fulfilled result:
+
+#+begin_src ts
+const out = results
+    .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+    .map(r => r.value);
+#+end_src
+
+Without that, TS may still think =r= could be rejected.
+
+So yes:
+
+- logically valid? absolutely
+- common? very
+- TypeScript sometimes needs help? yes
+
+And since you said you prefer simpler reasoning, the loop version is still often easier to read.
+
+*** But the filter call doesn't work here because value is unavailable in the map
+
+Right — because in TypeScript, a plain
+
+#+begin_src ts
+.filter(r => r.status === "fulfilled")
+#+end_src
+
+does not always narrow the type for the following =map=.
+
+So after the filter, TS may still think each item is:
+
+#+begin_src ts
+PromiseSettledResult<T>
+#+end_src
+
+and rejected results do not have =value=.
+
+You fix that with a type predicate:
+
+#+begin_src ts
+const successfulKeys = results
+    .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+    .map(r => r.value);
+#+end_src
+
+Why this works:
+
+- the return type
+  =r is PromiseFulfilledResult<string>=
+  tells TypeScript that filtered items are the fulfilled variant
+
+If you don’t want that syntax, use a loop instead:
+
+#+begin_src ts
+const successfulKeys: string[] = [];
+
+for (const r of results) {
+    if (r.status === "fulfilled") {
+        successfulKeys.push(r.value);
+    }
+}
+#+end_src
+
+That is often the clearest option.
+
+*** How about
+    const bufs: Buffer[] = all_results.filter(r => r.status === "fulfilled").map(r => (r as PromiseFulfilledResult<Buffer>).value);
+
+
+That works, but it uses a cast, so you’re telling TypeScript “trust me.”
+
+#+begin_src ts
+const bufs: Buffer[] = all_results
+    .filter(r => r.status === "fulfilled")
+    .map(r => (r as PromiseFulfilledResult<Buffer>).value);
+#+end_src
+
+So:
+
+- runtime: fine
+- type safety: weaker, because the cast can hide mistakes
+
+Better is a type predicate:
+
+#+begin_src ts
+const bufs: Buffer[] = all_results
+    .filter((r): r is PromiseFulfilledResult<Buffer> => r.status === "fulfilled")
+    .map(r => r.value);
+#+end_src
+
+That way TypeScript actually understands why =value= exists.
+
+If you hate that syntax, use a loop. It is clearer than the cast version.
+
+*** Is there a function to get the extension from content type?
+
+Not built into JS/TS.
+
+Common options:
+
+1. Keep your own small mapping if you only support a few types:
+
+#+begin_src ts
+function ext_from_content_type(contentType: string): string | null {
+    switch (contentType) {
+        case "image/jpeg": return "jpg";
+        case "image/png": return "png";
+        case "image/webp": return "webp";
+        case "image/gif": return "gif";
+        case "image/avif": return "avif";
+        default: return null;
+    }
+}
+#+end_src
+
+2. Use a library like =mime-types=:
+
+#+begin_src ts
+import mime from "mime-types";
+
+const ext = mime.extension("image/webp"); // "webp"
+#+end_src
+
+That’s probably the standard choice if you want broader coverage.
+
+Note:
+
+- one content type can sometimes map to more than one common extension
+  - =image/jpeg= -> usually ="jpeg"= or ="jpg"=
+- so if consistency matters, a custom mapping is often nicer
+
+For your app, if you only handle a few image types, I’d probably use a small explicit mapping.
+
+*** Can you add a bunch more, not just images, but like most content types to that util function you gave me?
+
+Sure. If you want a built-in-style utility without a dependency, a big switch is fine.
+
+#+begin_src ts
+export function ext_from_content_type(content_type: string): string | null {
+    switch (content_type.toLowerCase()) {
+        // text
+        case "text/plain": return "txt";
+        case "text/html": return "html";
+        case "text/css": return "css";
+        case "text/csv": return "csv";
+        case "text/javascript": return "js";
+        case "text/markdown": return "md";
+        case "text/xml": return "xml";
+
+        // images
+        case "image/jpeg": return "jpg";
+        case "image/png": return "png";
+        case "image/gif": return "gif";
+        case "image/webp": return "webp";
+        case "image/avif": return "avif";
+        case "image/svg+xml": return "svg";
+        case "image/bmp": return "bmp";
+        case "image/tiff": return "tif";
+        case "image/x-icon": return "ico";
+        case "image/heic": return "heic";
+        case "image/heif": return "heif";
+
+        // audio
+        case "audio/mpeg": return "mp3";
+        case "audio/mp4": return "m4a";
+        case "audio/wav": return "wav";
+        case "audio/webm": return "webm";
+        case "audio/ogg": return "ogg";
+        case "audio/aac": return "aac";
+        case "audio/flac": return "flac";
+        case "audio/midi": return "mid";
+
+        // video
+        case "video/mp4": return "mp4";
+        case "video/webm": return "webm";
+        case "video/ogg": return "ogv";
+        case "video/x-msvideo": return "avi";
+        case "video/quicktime": return "mov";
+        case "video/x-matroska": return "mkv";
+        case "video/mpeg": return "mpeg";
+
+        // application docs/data
+        case "application/json": return "json";
+        case "application/ld+json": return "jsonld";
+        case "application/pdf": return "pdf";
+        case "application/xml": return "xml";
+        case "application/zip": return "zip";
+        case "application/gzip": return "gz";
+        case "application/x-7z-compressed": return "7z";
+        case "application/x-rar-compressed": return "rar";
+        case "application/x-tar": return "tar";
+
+        // office docs
+        case "application/msword": return "doc";
+        case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return "docx";
+        case "application/vnd.ms-excel": return "xls";
+        case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": return "xlsx";
+        case "application/vnd.ms-powerpoint": return "ppt";
+        case "application/vnd.openxmlformats-officedocument.presentationml.presentation": return "pptx";
+
+        // web/app
+        case "application/javascript": return "js";
+        case "application/typescript": return "ts";
+        case "application/wasm": return "wasm";
+        case "application/xhtml+xml": return "xhtml";
+
+        // forms / misc
+        case "application/x-www-form-urlencoded": return "txt";
+        case "multipart/form-data": return null;
+
+        // fonts
+        case "font/ttf": return "ttf";
+        case "font/otf": return "otf";
+        case "font/woff": return "woff";
+        case "font/woff2": return "woff2";
+
+        // older / vendor-ish common ones
+        case "application/octet-stream": return "bin";
+        case "application/postscript": return "ps";
+        case "application/rtf": return "rtf";
+
+        default:
+            return null;
+    }
+}
+#+end_src
+
+Two practical notes:
+
+1. Strip parameters first if needed
+Sometimes content types come like:
+
+#+begin_src ts
+"text/html; charset=utf-8"
+#+end_src
+
+So better:
+
+#+begin_src ts
+export function ext_from_content_type(content_type: string): string | null {
+    const base = content_type.split(";")[0].trim().toLowerCase();
+
+    switch (base) {
+        case "text/plain": return "txt";
+        // ...
+        default: return null;
+    }
+}
+#+end_src
+
+2. This will never be as complete as =mime-types=
+If you want broad correctness, use the package. If you want predictable app-specific behavior, this util is fine.
+
+If you want, I can give you a version using a lookup object instead of a giant switch.
+
+*** Is there any reason to add extension on aws though? Content Type is preserved right?
+
+Yes, Content-Type is preserved separately, so strictly speaking you do not need a file extension in the S3 key.
+
+S3 does not care about extensions. What matters for serving the object correctly is usually:
+
+- the object key
+- the stored =ContentType= metadata
+
+So this is fine:
+
+#+begin_src ts
+uploads/abc123
+#+end_src
+
+if you upload it with:
+
+#+begin_src ts
+ContentType: "image/webp"
+#+end_src
+
+Reasons people still include an extension:
+
+- easier debugging when looking at keys manually
+- nicer URLs
+- easier ad hoc downloads from consoles/tools
+- some systems or humans infer type from filename
+- if metadata is ever lost or copied incorrectly, extension helps
+
+Reasons not to bother:
+
+- keys are cleaner and shorter
+- type is already stored explicitly
+- your app likely already knows what it stored
+
+So for your own app-internal S3 objects:
+
+- no, extension is not required
+- yes, Content-Type is enough
+
+A reasonable middle ground is:
+
+- generated unique key + extension for readability
+  or
+- generated unique key with no extension if you prefer cleaner storage IDs
+
+Both are valid.
+
+*** map always returns an array of the same size correct?
+
+Yes.
+
+=.map(...)= returns a new array with exactly one output element for each input element, so the length is the same.
+
+Example:
+
+#+begin_src ts
+[1, 2, 3].map(x => x * 2)   // [2, 4, 6]
+#+end_src
+
+Input length: 3  
+Output length: 3
+
+If you want to sometimes remove items, =map= is not the right tool by itself. Use:
+
+- =filter=
+- =flatMap=
+- or a loop
+
+*** Why is this saying san_results[ind] might be undefined?
+    // Basically filter and map in one call to get our results to a list of only things that succeeded 
+    const san_results = all_results.reduce<data_key[]>((acc, r) => {
+        if (r.status === "fulfilled") {
+            acc.push({data: r.value, key: generate_photo_aws_key(listing._id, content_type), content_type});
+        }
+        return acc;
+    }, []);
+
+    // If all didn't succeed sanitizing then error
+    if (san_results.length !== all_results.length) {
+        // Return some error fragment
+    }
+
+    const upload_proms = san_results.map( r => { aws.upload_to_s3(r.key, r.data, r.content_type)});
+    const all_upload_results = await Promise.allSettled(upload_proms);
+    const uploads_succeeded = all_upload_results.reduce<string[]>((acc, r, ind)=>{
+        if (r.status === "fulfilled") {
+            acc.push(san_results[ind].key);
+        }
+        return acc;
+    },[]);
+
+
+Because TypeScript doesn’t know that =all_upload_results= and =san_results= must stay perfectly aligned by index, even though you created =upload_proms= from =san_results=.
+
+So here:
+
+#+begin_src ts
+acc.push(san_results[ind].key);
+#+end_src
+
+TS sees:
+
+- =ind= is just a number
+- array indexing can produce =undefined=
+- so =san_results[ind]= might be =undefined=
+
+This is especially common if you have =noUncheckedIndexedAccess= enabled.
+
+Also, there’s another issue in your code:
+
+#+begin_src ts
+const upload_proms = san_results.map(r => { aws.upload_to_s3(r.key, r.data, r.content_type) });
+#+end_src
+
+Because of the braces, that callback returns =undefined= unless you explicitly =return=. So you probably want:
+
+#+begin_src ts
+const upload_proms = san_results.map(r =>
+    aws.upload_to_s3(r.key, r.data, r.content_type)
+);
+#+end_src
+
+or:
+
+#+begin_src ts
+const upload_proms = san_results.map(r => {
+    return aws.upload_to_s3(r.key, r.data, r.content_type);
+});
+#+end_src
+
+For the =undefined= complaint, the clearest fix is to keep the key with the promise up front, or just use a loop.
+
+Simple loop version:
+
+#+begin_src ts
+const upload_proms: Promise<void>[] = [];
+
+for (const r of san_results) {
+    upload_proms.push(aws.upload_to_s3(r.key, r.data, r.content_type));
+}
+
+const all_upload_results = await Promise.allSettled(upload_proms);
+
+const uploads_succeeded: string[] = [];
+
+for (let i = 0; i < all_upload_results.length; i++) {
+    const result = all_upload_results[i];
+    if (result.status === "fulfilled") {
+        uploads_succeeded.push(san_results[i]!.key);
+    }
+}
+#+end_src
+
+The =!= says: “I know this exists.”
+
+A cleaner approach is to make each upload promise resolve with its key:
+
+#+begin_src ts
+const upload_proms: Promise<string>[] = [];
+
+for (const r of san_results) {
+    upload_proms.push((async () => {
+        await aws.upload_to_s3(r.key, r.data, r.content_type);
+        return r.key;
+    })());
+}
+
+const all_upload_results = await Promise.allSettled(upload_proms);
+
+const uploads_succeeded: string[] = [];
+
+for (const r of all_upload_results) {
+    if (r.status === "fulfilled") {
+        uploads_succeeded.push(r.value);
+    }
+}
+#+end_src
+
+That is better because you no longer depend on matching array indexes.
+
+*** Is there an easy way to joing an array of strings?
+
+Yes:
+
+#+begin_src ts
+const s = arr.join(", ");
+#+end_src
+
+Example:
+
+#+begin_src ts
+const arr = ["a", "b", "c"];
+const s = arr.join(", ");   // "a, b, c"
+#+end_src
+
+If you want no separator:
+
+#+begin_src ts
+arr.join("")
+#+end_src
+
+If you want spaces/newlines/etc., just use that as the separator.
+
+*** If you do my_arr[5] = "bla" and 5 is longer than the array, what happens in js?
+
+The array grows to that length, and the missing slots become empty holes.
+
+Example:
+
+#+begin_src ts
+const a = ["x", "y"];
+a[5] = "bla";
+
+console.log(a);        // [ 'x', 'y', <3 empty items>, 'bla' ]
+console.log(a.length); // 6
+#+end_src
+
+So:
+
+- =a[0]= -> ="x"=
+- =a[1]= -> ="y"=
+- =a[2]=, =a[3]=, =a[4]= -> empty slots
+- =a[5]= -> ="bla"=
+
+Important: those are not quite the same as explicit =undefined= values; they are sparse array holes. But reading them usually gives =undefined=.
+
+*** How do you push an element on an arrray in mongo?
+
+Use =$push= in your update.
+
+Example with the MongoDB driver:
+
+#+begin_src ts
+await collection.updateOne(
+    { _id: listingId },
+    {
+        $push: {
+            images: newImage
+        }
+    }
+);
+#+end_src
+
+If =images= is an array field, this appends =newImage= to it.
+
+You can also push multiple at once with =$each=:
+
+#+begin_src ts
+await collection.updateOne(
+    { _id: listingId },
+    {
+        $push: {
+            images: {
+                $each: [img1, img2]
+            }
+        }
+    }
+);
+#+end_src
+
+If you want, I can also show how to update one specific image object inside the array by =aws_key=.
+
+*** What will the mongo library return in case where there are no network errors but the item for _id provided wasn't found?
+
+For =updateOne=, it does not throw just because no document matched.
+
+It returns an =UpdateResult= telling you what happened.
+
+Typical fields:
+
+- =matchedCount= — number of docs matched
+- =modifiedCount= — number of docs actually modified
+- =upsertedCount=
+- =upsertedId=
+- =acknowledged=
+
+So if the =_id= was not found, typically:
+
+#+begin_src ts
+{
+  acknowledged: true,
+  matchedCount: 0,
+  modifiedCount: 0,
+  upsertedCount: 0,
+  upsertedId: null
+}
+#+end_src
+
+So you should check:
+
+#+begin_src ts
+const result = await collection.updateOne(
+    { _id: listingId },
+    { $push: { images: newImage } }
+);
+
+if (result.matchedCount === 0) {
+    throw make_http_error("Listing not found", 404);
+}
+#+end_src
+
+So:
+
+- network/driver/server error → throws
+- no matching document → no throw, just =matchedCount === 0=
+
+*** When would acknowledged be false? Should I check that for anything?
+
+=acknowledged= is false when the write was sent with unacknowledged write concern, basically =w: 0=.
+
+That means MongoDB does not confirm the write result, so counts like:
+
+- =matchedCount=
+- =modifiedCount=
+
+are not meaningful.
+
+In normal app code, you almost always use acknowledged writes, so =acknowledged= is usually true.
+
+So should you check it?
+
+- usually no, not if you use normal defaults
+- yes only if your code might use unacknowledged writes or custom write concern
+
+Typical normal code just checks =matchedCount=:
+
+#+begin_src ts
+const result = await collection.updateOne(filter, update);
+
+if (result.matchedCount === 0) {
+    throw make_http_error("Not found", 404);
+}
+#+end_src
+
+If you want to be extra defensive:
+
+#+begin_src ts
+if (!result.acknowledged) {
+    throw make_http_error("Mongo write was not acknowledged", 500);
+}
+#+end_src
+
+But in most applications, that check is unnecessary noise unless you explicitly configured =w: 0=.
+
+*** If I have a fastify route that does this:
+#+begin_src js
+  if (result.matchedCount === 0) {
+      wlog(`User ${usr.id} not found in db - likely removed while logged in`);
+      clear_user_session(reply);
+      reply.header("HX-Redirect", "/login");
+      reply.type("text/html").send("");
+      return;
+  }
+
+  await upload_profile_pic_to_s3(usr.id, data);
+  const html = create_upload_pfp_html(pfp_s3_key, null);
+  reply.type("text/html").send(html);
+#+end_src
+
+I though when you return in a fastify handler it will auto send... but what if you want to return html?
+
+In Fastify, these are two different styles:
+
+1. Use =reply.send(...)= yourself
+2. Return a value and let Fastify send it
+
+You generally should pick one style per branch.
+
+In your branch here:
+
+#+begin_src js
+reply.type("text/html").send("");
+return;
+#+end_src
+
+that is fine. The =return= is not what sends the response; =send(...)= already did that. The =return= just stops the handler.
+
+If you want to return HTML without calling =send=, you can do:
+
+#+begin_src js
+reply.type("text/html");
+return html;
+#+end_src
+
+Fastify will send the returned value.
+
+So these are both valid:
+
+Manual send style:
+
+#+begin_src js
+reply.type("text/html").send(html);
+return;
+#+end_src
+
+Return style:
+
+#+begin_src js
+reply.type("text/html");
+return html;
+#+end_src
+
+For your example, you could write:
+
+#+begin_src js
+if (result.matchedCount === 0) {
+    wlog(`User ${usr.id} not found in db - likely removed while logged in`);
+    clear_user_session(reply);
+    reply.header("HX-Redirect", "/login");
+    reply.type("text/html");
+    return "";
+}
+
+await upload_profile_pic_to_s3(usr.id, data);
+const html = create_upload_pfp_html(pfp_s3_key, null);
+reply.type("text/html");
+return html;
+#+end_src
+
+Key point:
+
+- =return= alone does not auto-send some earlier expression
+- returning a value lets Fastify send that value
+- =reply.send(...)= sends immediately
+- =return;= after =send(...)= just exits the handler
+
+*** So calling type and header both mutate the reply object
+
+Yes.
+
+Methods like:
+
+- =reply.type(...)=
+- =reply.header(...)=
+- =reply.code(...)=
+
+mutate/configure the =reply= object.
+
+They set response metadata on the reply, and then later either:
+
+- you call =reply.send(...)=, or
+- you return a value and Fastify sends it
+
+So this works because you mutate =reply= first, then return the body:
+
+#+begin_src js
+reply.header("HX-Redirect", "/login");
+reply.type("text/html");
+return "";
+#+end_src
+
+They usually also return the =reply= object itself, so chaining works:
+
+#+begin_src js
+reply.header("HX-Redirect", "/login").type("text/html").send("");
+#+end_src
+
+So yes: they are mutating/configuration methods on =reply=.
+
+*** So I could call reply.type at the top of the function once
+
+Yes, if every branch of that handler should return the same content type.
+
+Example:
+
+#+begin_src js
+reply.type("text/html");
+
+if (result.matchedCount === 0) {
+    clear_user_session(reply);
+    reply.header("HX-Redirect", "/login");
+    return "";
+}
+
+await upload_profile_pic_to_s3(usr.id, data);
+return create_upload_pfp_html(pfp_s3_key, null);
+#+end_src
+
+That’s fine.
+
+Only avoid doing that if some branches need a different content type, redirect, file stream, JSON, etc. Then set it per branch instead.
+
+*** Is that the correct way to redirect here?
+
+If this is an HTMX request, =HX-Redirect= is a correct way to tell the browser to do a full redirect.
+
+So this:
+
+#+begin_src js
+reply.header("HX-Redirect", "/login");
+reply.type("text/html");
+return "";
+#+end_src
+
+is fine for an HTMX-triggered request.
+
+Important distinction:
+
+- normal browser/Fastify redirect → use HTTP redirect status + =Location=
+- HTMX request → often use =HX-Redirect=
+
+Examples:
+
+Normal redirect:
+
+#+begin_src js
+return reply.redirect("/login");
+#+end_src
+
+HTMX redirect:
+
+#+begin_src js
+reply.header("HX-Redirect", "/login");
+return "";
+#+end_src
+
+If this route might be called both by HTMX and non-HTMX clients, you may want to branch based on whether it is an HTMX request.
+
+So: yes, for HTMX, your approach is correct.
+
+*** Can I do both? Set the redirect header then return reply.redirect?
+
+You can, but you generally shouldn’t.
+
+=HX-Redirect= and =reply.redirect()= are two different mechanisms:
+
+- =HX-Redirect= → HTMX-specific client instruction
+- =reply.redirect()= → normal HTTP redirect via status + =Location= header
+
+Using both can be redundant or confusing. Prefer one based on the request type.
+
+Typical pattern:
+
+#+begin_src js
+if (req.headers["hx-request"]) {
+    reply.header("HX-Redirect", "/login");
+    return "";
+} else {
+    return reply.redirect("/login");
+}
+#+end_src
+
+So yes, technically you can set both headers, but it’s usually not the clean/correct choice. Pick the one appropriate for the client.
+
+*** What if the type is set to text/html before the redirect? Is that fine still?
+
+Yes, usually fine, but unnecessary.
+
+If you do a normal HTTP redirect with =reply.redirect()=, the important parts are:
+
+- redirect status code
+- =Location= header
+
+The =Content-Type= usually doesn’t matter much for the redirect response.
+
+So this is generally okay:
+
+#+begin_src js
+reply.type("text/html");
+return reply.redirect("/login");
+#+end_src
+
+but the =type("text/html")= is mostly irrelevant there.
+
+For =HX-Redirect= plus returning an empty string, =text/html= is also fine.
+
+So:
+
+- harmless? usually yes
+- useful? usually not for redirects
+- if set earlier for the whole handler? fine, no big problem
+
+*** If I have an htmx element that is hx-post to my endpoint and targeting an innerhtml swap on an element, what happens if I call reply.redirect instead of HX-Redirect header?
+
+HTMX will usually treat a normal HTTP redirect differently from =HX-Redirect=.
+
+If you return =reply.redirect(...)= to an HTMX request:
+
+- the browser/fetch layer follows the redirect
+- HTMX receives the final HTML response
+- then HTMX swaps that HTML into the target element
+
+So instead of navigating the whole page to =/login=, you may end up with the login page HTML inserted into your target element.
+
+That’s usually /not/ what you want.
+
+If you want a full-page navigation for an HTMX request, use:
+
+#+begin_src js
+reply.header("HX-Redirect", "/login");
+return "";
+#+end_src
+
+So:
+
+- =reply.redirect("/login")= on HTMX request → likely swaps redirected page content into target
+- =HX-Redirect= → full browser navigation to new page
+
+That is exactly why =HX-Redirect= exists.
+
+*** What if i have a 404 error page that is returned in an htmx swap request - would that too be rendered within the swapped element?
+
+Yes, usually yes.
+
+For an HTMX request, if the server returns an HTML 404 page, HTMX can treat that response as content for the target element rather than as a full page navigation.
+
+So you can end up with your 404 page HTML inserted inside the swapped element.
+
+That’s often undesirable for full-page error pages.
+
+In practice, with HTMX requests, you usually want to return one of:
+
+- a fragment suitable for swapping
+- an HTMX-specific redirect/header
+- an HTMX-specific error fragment/message
+
+not a full standalone page layout, unless you intentionally want that inserted.
+
+So yes: a 404 HTML response to an HTMX swap request may be rendered into the target area rather than replacing the whole page.
+
+*** Okay - an an updateOne call, why might matched count equal 1 but not modified count?
+
+Because a document matched the filter, but the update didn’t actually change anything.
+
+So:
+
+- =matchedCount = 1= → a document with that filter existed
+- =modifiedCount = 0= → Mongo decided the document was already effectively in that state
+
+Common example:
+
+#+begin_src ts
+await collection.updateOne(
+    { _id: id },
+    { $set: { name: "Alice" } }
+);
+#+end_src
+
+If =name= is already ="Alice"=, then:
+
+- =matchedCount= may be 1
+- =modifiedCount= may be 0
+
+Other cases:
+
+- =$addToSet= with a value already present
+- update computes the same value as before
+- some no-op update expression
+
+So:
+
+- use =matchedCount= to know whether the document existed
+- use =modifiedCount= to know whether anything actually changed
+
+*** So an array push should always modify if matched
+
+Usually yes, with =$push=.
+
+If a document matches and you do:
+
+#+begin_src ts
+{ $push: { images: newImage } }
+#+end_src
+
+then that should modify the document, so you’d normally expect:
+
+- =matchedCount = 1=
+- =modifiedCount = 1=
+
+because =$push= appends a new array element.
+
+The main caveat is if the update fails for some reason, then it would throw rather than quietly give =modifiedCount = 0=.
+
+So in normal successful use, yes: a matched =$push= should modify.
+
+*** Take a look at this function
+#+begin_src js
+async function handle_push_listing_photo(request: FastifyRequest<patch_photo_req_data>, reply: FastifyReply) {
+    const listings = mongo.get_listings();
+    const { id } = request.params;
+    const listing = await get_listing(id, listings);
+    const { file, content_type } = await aws.download_from_s3(request.query.key);
+
+    // Remove image from aws - continue even if removal fails
+    try {
+        await aws.delete_from_s3(request.query.key);
+    } catch (err: any) {
+        const err_msg = err instanceof Error ? ":" + err.message : "";
+        elog(`Failed to delete temp upload ${request.query.key}${err_msg} - need to fix`);
+    }
+
+    if (!verify_buffer_is_image(Buffer.from(file))) {
+        // Return some error fragment
+    }
+
+    const proms: Promise<Buffer>[] = [];
+    const MAIN_PHOTO_IND = 0;
+    const CARD_PHOTO_IND = 1;
+    const THUMB_PHOTO_IND = 2;
+
+    const main = sanitize_image(file, 1600, 1600, { fit: "inside", withoutEnlargement: true });
+    proms[MAIN_PHOTO_IND]= main;
+
+    const card = sanitize_image(file, 400, 400, { fit: "cover", position: "centre", withoutEnlargement: true });
+    proms[CARD_PHOTO_IND] = (card);
+
+    const thumb = sanitize_image(file, 96, 96, { fit: "cover", position: "centre", withoutEnlargement: true });
+    proms[THUMB_PHOTO_IND] = thumb;
+
+    // allSettled only throws for things like syntax errors and such
+    const all_results = await Promise.allSettled(proms);
+
+    type data_key = { data: Buffer; key: string; content_type: string };
+
+    // Basically filter and map in one call to get our results to a list of only things that succeeded
+    const san_results = all_results.reduce<data_key[]>((acc, r) => {
+        if (r.status === "fulfilled") {
+            acc.push({ data: r.value, key: generate_photo_aws_key(listing._id, content_type), content_type });
+        }
+        return acc;
+    }, []);
+
+    // If all didn't succeed sanitizing then error
+    if (san_results.length !== all_results.length) {
+        // Return some error fragment
+    }
+
+    // Everything worked - lets do the upload
+    const upload_proms = san_results.map(async (r) => {
+        await aws.upload_to_s3(r.key, r.data, r.content_type);
+        return r.key;
+    });
+
+    const all_upload_results = await Promise.allSettled(upload_proms);
+    const uploads_succeeded = all_upload_results.reduce<string[]>((acc, r) => {
+        if (r.status === "fulfilled") {
+            acc.push(r.value);
+        }
+        return acc;
+    }, []);
+
+    // There's nothing more we can really do here other than log the failure
+    const delete_aws_keys = async (keys: string[]) => {
+        // Delete the successful uploads and return
+        const del_proms = keys.map((r) => aws.delete_from_s3(r));
+        const results = await Promise.allSettled(del_proms);
+        const failed = results.reduce<string[]>((arr, r) => {
+            if (r.status === "rejected") arr.push(r.reason);
+            return arr;
+        }, []);
+        if (failed.length > 0) elog(`Failed to delete the following photo keys: ${failed.join(", ")}`);
+    };
+
+    // If not all uploads succeeded, we need to delete the successful ones
+    if (uploads_succeeded.length !== all_upload_results.length) {
+        await delete_aws_keys(uploads_succeeded);
+        // Return some error fragment
+    }
+
+    // Finally, update the listing and save
+    const new_photo: ss_listing_photo = {
+        id: randomUUID(),
+        aws_keys: {
+            main: uploads_succeeded[MAIN_PHOTO_IND]!,
+            card: uploads_succeeded[CARD_PHOTO_IND]!,
+            thumb: uploads_succeeded[THUMB_PHOTO_IND]!
+        },
+        sort_order: request.query.order
+    };
+    
+    const result = await listings.updateOne(
+        { _id: listing._id },
+        {
+            $push: {
+                photos: new_photo
+            }
+        }
+    );
+    if (result.matchedCount === 0) {
+        // return error fragment
+    }
+    // return success fragment
+}
+#+end_src
+
+I'm wondering what endpoint this should be, and what error fragments/vs normal fragments i should return. I think a successful op should return the canonical image thumbnail html, but what about an error? Maybe an out of band swap? If I have a request for an outer html swap on an image div, and the new div has a different id, will that swap work? What if the div should be removed (for example an error occurs) and I need an oob swap for an error element?
+
+Yes, success returning the canonical thumbnail HTML fragment makes sense.
+
+A few direct answers:
+
+1. Endpoint shape
+This feels like a =POST=, not =PATCH=.
+
+Why:
+- it creates a new listing photo entry
+- it has side effects in S3 and DB
+- it is not really “patch this existing photo”; it is “add a photo to this listing from temp upload”
+
+Something like:
+
+- =POST /listings/:id/photos=
+- query/body includes temp S3 key and sort order
+
+If later you edit alt text/order/etc, that would be =PATCH= on a specific photo.
+
+2. Success response
+Yes: return the canonical rendered photo item HTML for the new photo.
+
+That is good because:
+- server remains source of truth
+- client doesn’t need to reconstruct markup
+- IDs/attrs stay consistent
+
+3. Error response
+If the request targets a photo slot/container with =outerHTML= swap, then the error response should usually be a fragment suitable for replacing that target.
+
+What to return depends on desired UX:
+
+- keep the upload box but show inline error
+- remove the temporary “uploading” element and show an error elsewhere
+- revert to an empty photo slot
+
+Usually best:
+- return a fragment that replaces the target with an “empty slot + error message” or “upload failed” UI
+- optionally also send an OOB fragment for a page-level flash/error area
+
+4. Will outerHTML swap work if returned div has a different id?
+Yes.
+
+HTMX swaps DOM, not “same-id element identity”.
+If target is some element and swap is =outerHTML=, the target element is replaced with whatever HTML you return.
+
+The replacement element can have:
+- same id
+- different id
+- no id
+
+All fine, as long as the returned HTML is valid for that location.
+
+5. What if the div should be removed entirely?
+Also fine. Return empty content with =outerHTML= and the target element is removed.
+
+Example:
+#+begin_src html
+<!-- empty response body -->
+#+end_src
+
+or return nothing meaningful.
+
+But if you also want to show an error message elsewhere, then yes, use OOB.
+
+6. OOB for error element
+Yes, this is a good use case.
+
+Pattern:
+- main response removes/replaces the photo placeholder
+- OOB fragment updates a dedicated error/flash container
+
+Example idea:
+
+#+begin_src html
+<div id="photo-slot-3" class="empty-photo-slot">
+  Upload failed. Try again.
+</div>
+
+<div id="listing-photo-errors" hx-swap-oob="innerHTML">
+  Failed to process image.
+</div>
+#+end_src
+
+That lets one response update both:
+- the requested target
+- a separate error area
+
+7. Practical recommendation
+For your case, I’d do:
+
+On success:
+- return canonical thumbnail/photo-tile fragment for =outerHTML= replacement
+
+On failure before photo exists:
+- either return the original empty slot fragment again, maybe with inline error
+- and/or include an OOB update for a general error message area
+
+On failure where you want the uploading placeholder removed:
+- return the empty slot fragment as the main target replacement
+- include OOB flash error
+
+That is usually cleaner than returning some standalone error blob.
+
+8. About IDs
+If the request was issued by a temporary uploading element, and success returns a real canonical photo div with a new id, that is perfectly fine. In fact that is often exactly what you want.
+
+Example flow:
+- temporary element id: =uploading-photo-slot-3=
+- response replaces it with canonical saved element id: =listing-photo-<photo_id>=
+
+That works.
+
+So the best mental model is:
+- HTMX target/swap cares about replacing DOM at the target location
+- returned element does not need the same id
+- OOB is for updating some other place too
+
+If you want, I can sketch a concrete response strategy for:
+- success
+- invalid image
+- sanitize failure
+- partial upload failure
+- DB save failure
+
+*** If its an outerhtml swap and I return "", does that actually remove the element from the DOM?
+
+Yes.
+
+With HTMX, if the target swap is =outerHTML= and the response body is empty, the target element is removed from the DOM.
+
+So returning:
+
+#+begin_src js
+return "";
+#+end_src
+
+for an =outerHTML= swap will effectively delete the target element.
+
+That can be useful if:
+- the temporary upload placeholder should disappear
+- you’ll show an error elsewhere via OOB
+
+Just be aware that if you remove it and do /not/ replace it with anything, the user may lose the upload slot UI unless that is intentional.
+
+*** Okay, what if the errors are in a div that i want to add the error too using oob, not replace the entire div?
+
+Yes — use an OOB append/prepend-style swap instead of replacing the whole error container.
+
+Example:
+
+#+begin_src html
+<div id="photo-errors" hx-swap-oob="beforeend">
+  <div class="error">Upload failed.</div>
+</div>
+#+end_src
+
+That tells HTMX:
+
+- find =#photo-errors= in the existing page
+- insert this new error element at the end of it
+
+Other useful OOB swap values:
+
+- =innerHTML= — replace contents
+- =outerHTML= — replace whole element
+- =beforeend= — append inside
+- =afterbegin= — prepend inside
+- =beforebegin=
+- =afterend=
+
+So if you want to /add/ an error, not replace the container, =beforeend= is probably what you want.
+
+If your main target should disappear, you can combine both in one response:
+
+#+begin_src html
+<div id="photo-errors" hx-swap-oob="beforeend">
+  <div class="error">Upload failed.</div>
+</div>
+#+end_src
+
+with otherwise empty main content for the outerHTML target removal.
+
+One caveat: if you return only the OOB element, HTMX may also try to use it as the main swap content unless configured otherwise. A common pattern is:
+
+- main response body is empty or replacement fragment
+- plus OOB element in same response
+
+If you want, I can show the exact HTML response shape for “remove target, append error OOB.”
+
+*** How do I return the main response body as empty html though if i have an additional oob swap?
+
+You can’t make the entire response literally empty if you also want to include OOB HTML, because the OOB HTML has to be in the response body.
+
+But you can make the /main swap effectively empty/ by returning only OOB content and telling HTMX not to swap the normal response into the target.
+
+Best way: set the response header:
+
+#+begin_src js
+reply.header("HX-Reswap", "none");
+#+end_src
+
+Then return only your OOB fragment(s):
+
+#+begin_src html
+<div id="photo-errors" hx-swap-oob="beforeend">
+  <div class="error">Upload failed.</div>
+</div>
+#+end_src
+
+That means:
+
+- normal target swap: none
+- OOB swap(s): still processed
+
+So in Fastify:
+
+#+begin_src js
+reply.type("text/html");
+reply.header("HX-Reswap", "none");
+return `
+  <div id="photo-errors" hx-swap-oob="beforeend">
+    <div class="error">Upload failed.</div>
+  </div>
+`;
+#+end_src
+
+If instead you want:
+
+- target element removed
+- plus OOB error appended
+
+then don’t use =HX-Reswap: none=. Return a response whose main non-OOB content is empty /for the target/, plus OOB content is tricky because any non-OOB top-level HTML may become the main swap.
+
+A common workaround is to return a tiny empty placeholder for the main swap, e.g.:
+
+#+begin_src html
+<div></div>
+<div id="photo-errors" hx-swap-oob="beforeend">
+  <div class="error">Upload failed.</div>
+</div>
+#+end_src
+
+But that replaces the target with =<div></div>=, not removes it.
+
+So if you specifically want:
+- remove target
+- append OOB error
+
+HTMX doesn’t have a perfect “empty main body plus OOB content” HTML shape by itself. The clean solution is usually one of:
+
+1. Use =HX-Reswap: none= and handle target removal another way
+2. Replace target with an empty-slot fragment instead of true removal
+3. Trigger client event and let client remove target
+
+In practice, replacing the target with a proper “empty slot” fragment is usually the best UX.
+
+*** This is for a thumnail - so what would an empty fragment slot look like exactly?
+
+An “empty slot” fragment is just the HTML you want in place of the thumbnail when no image exists yet.
+
+Since your request is swapping =outerHTML= on the thumbnail container, the empty fragment should be the same kind of container element, just in its “no photo” state.
+
+For example, if a filled slot looks like:
+
+#+begin_src html
+<div id="listing-photo-slot-3" class="photo-thumb">
+  <img src="/img/..." alt="">
+  <button ...>Remove</button>
+</div>
+#+end_src
+
+then an empty-slot fragment might look like:
+
+#+begin_src html
+<div id="listing-photo-slot-3" class="photo-thumb empty">
+  <label for="photo-upload-3" class="photo-thumb-upload">
+    <span>Add photo</span>
+  </label>
+  <input id="photo-upload-3" type="file" name="photo" hidden>
+</div>
+#+end_src
+
+Or if the upload control lives elsewhere, even simpler:
+
+#+begin_src html
+<div id="listing-photo-slot-3" class="photo-thumb empty">
+  <div class="photo-thumb-placeholder">No photo</div>
+</div>
+#+end_src
+
+The point is:
+
+- same slot position in the grid
+- same outer container role
+- but empty state UI instead of the image
+
+For your error case, you’d probably return:
+
+- main fragment: empty slot HTML for that thumbnail position
+- OOB fragment: append error message to your error area
+
+Example combined response:
+
+#+begin_src html
+<div id="listing-photo-slot-3" class="photo-thumb empty">
+  <div class="photo-thumb-placeholder">Add photo</div>
+</div>
+
+<div id="photo-errors" hx-swap-oob="beforeend">
+  <div class="error">Failed to process image.</div>
+</div>
+#+end_src
+
+That will:
+
+- replace the current thumbnail element with the empty slot
+- append the error to =#photo-errors=
+
+Important:
+keep the same slot/container id if future operations target that slot by id. If you change the id, it may still swap fine now, but later targeting becomes harder.
+
+So I’d usually keep:
+- stable slot id for the UI position
+- separate photo id for actual saved photo items, if needed inside data attributes
+
+If you want, I can sketch a good thumbnail slot structure for:
+- empty
+- uploading
+- success
+- error
+
+*** So then, the error slot just appears in place of the normal slot... and if the user clicks the x, it removes the error thumbnail and the error.. fine.. but what happens if the user uploads another photo? I guess we just leave that error in place. What happens if they refresh the page? Mainly, what happens with sort orders?
+
+Yes — this is exactly why an “error thumbnail as a slot state” is often cleaner than removing the slot.
+
+Best model:
+the /slot/ has a stable position, and its /state/ changes.
+
+States:
+- empty
+- uploading
+- saved photo
+- error
+
+That helps with sort order a lot.
+
+For sort orders:
+don’t let sort order depend on “current array of only successful photos on screen.”
+Instead, give each slot a stable order/index.
+
+Example:
+- slot 0
+- slot 1
+- slot 2
+- slot 3
+
+Then each slot can currently contain:
+- nothing
+- pending upload
+- saved photo
+- failed upload UI
+
+So if slot 2 fails, slot 2 is still slot 2.
+
+Then:
+
+- uploading another photo into that slot keeps same sort order
+- refreshing the page rebuilds from DB:
+  - saved photos appear where they belong
+  - unsaved error state disappears unless you explicitly persist it
+  - empty slot appears if no photo exists at that order
+
+That is probably what you want:
+error UI is temporary, not persisted.
+
+So after refresh:
+- successful photos come from DB
+- failed upload/error thumbnails are gone
+- their slots revert to empty
+
+That’s normal and good.
+
+In other words:
+
+- persist /photos/
+- do not persist transient upload errors
+- persist sort order only for successful saved photos, or model fixed slots explicitly
+
+Two possible models:
+
+1. Fixed slots
+If listings have, say, max 8 photos, then slot order is easiest.
+Each UI position is fixed.
+DB photos have =sort_order= matching the slot.
+
+If a slot has no photo, it renders empty.
+
+2. Arbitrary list with reorder
+If users can add unlimited photos and reorder freely, then sort_order belongs to saved photos.
+In that case, failed uploads are more awkward, because they are temporary non-photos sitting between real photos.
+Still manageable, but the UI has to treat them as temporary client state.
+
+From what you’re describing, fixed slots sounds much cleaner.
+
+So to your specific questions:
+
+- upload another photo after error?
+  - either reuse same slot and replace error state
+  - or let user dismiss error and return to empty state first
+- refresh page?
+  - error disappears, since it was never saved
+  - slot becomes empty unless a real photo was saved
+- sort orders?
+  - should remain tied to stable slot position, not current DOM accident
+
+My recommendation:
+- keep a stable slot id/order in the UI
+- on failure, return that slot in an error state
+- on retry or dismiss, return it to empty
+- on refresh, just render from saved DB photos by =sort_order= and fill missing positions with empty slots
+
+That keeps everything sane.
+
+
+
+Yes. Treat it as a slot, not as "whatever thumbnail currently exists there."
+
+Recommended model:
+- fixed UI slots by order
+- each slot has stable sort_order
+- slot state can be empty/uploading/saved/error
+- only saved photos persist
+- error state is transient
+
+So:
+- if upload fails, slot stays at same sort_order, just shows error state
+- if user retries, same slot/order is reused
+- if user refreshes, error state disappears and unsaved slot becomes empty
+- saved photos still render in their persisted sort_order
+
+That avoids sort-order weirdness entirely.
+
+A good rule:
+- never derive sort order from current DOM after transient failures
+- always use the slot/order value explicitly
+
+So if slot 3 fails, it is still slot 3. On refresh:
+- if DB has photo with sort_order 3, render it
+- otherwise render empty slot 3
+
+That’s probably the cleanest approach for your UI.
+
+*** Yeah but that's wierd - and I've never seen it.. where if an image upload fails now you have this empty slot sitting there in your thumbnail list
+
+Yeah — that’s because most UIs don’t leave a dead empty hole in-place after failure. They usually do one of these:
+
+1. Keep the thumbnail tile, but show it in an error state
+- red border
+- “upload failed”
+- retry / remove button
+
+2. Remove the failed temporary tile entirely
+- show an error message elsewhere
+- grid collapses naturally
+
+3. Revert the tile back to an “add photo” tile
+- if the UI is slot-based
+
+What feels weird is specifically:
+- failed upload -> blank empty slot in middle of real photos
+
+I agree that’s usually not the best UX unless your whole UI is explicitly fixed-slot.
+
+For a normal thumbnail list, the more natural behavior is:
+
+- during upload: show temporary uploading tile
+- on success: replace with canonical thumbnail tile
+- on failure: remove that temporary tile and append an error message or toast
+
+Then on refresh:
+- only successfully saved photos appear
+- failed temp item is gone
+
+That is how most apps feel.
+
+So for your case, I’d probably suggest:
+
+- if this is a temporary uploading tile in a list, on failure remove it
+- append error via OOB to a flash/errors area
+- do not leave an empty slot unless your UI is truly fixed-slot-based
+
+About sort order:
+if uploads are inserted at a chosen order, then failure simply means no photo was added at that order.
+If the UI is a free-flowing list, that’s okay — the order just applies to saved items.
+
+If you need precise ordering with async uploads, then the client should send the intended =sort_order=, and the server should save it only on success.
+
+So I’d separate two designs:
+
+- fixed-slot photo picker → slot remains, maybe with retry/error UI
+- normal gallery/list → failed temp tile disappears, error shown elsewhere
+
+From what you’re saying, yours sounds more like the second. So yes: remove the failed tile rather than replace it with a blank slot.
+
+*** Yes order matters and it is sent by client - but that would mean on failure I would have to modify photo items after that failed ones wouldn't it?
+
+Only if you require sort_order to be contiguous with no gaps.
+
+You have two choices:
+
+1. Allow gaps temporarily or permanently
+Example saved orders:
+- 0
+- 1
+- 3
+- 4
+
+If upload for 2 failed, nothing is wrong. When rendering, just sort by =sort_order=. This is the simplest.
+
+2. Renumber to keep orders contiguous
+Then yes, after deletion/failure/removal you’d need to shift later items down.
+
+Most systems avoid doing that on every failure because it’s annoying and race-prone.
+
+Given your flow, I’d recommend:
+- client sends intended order
+- server saves that order on success
+- if upload fails, nothing is inserted
+- do not renumber other saved photos just because a pending upload failed
+
+Why this is okay:
+- the failed photo never actually became part of persisted state
+- other saved photos already have valid order
+- when rendering, you sort by =sort_order=
+- if you need display positions 0..n-1, you can derive that in UI without rewriting DB
+
+The real question is:
+does =sort_order= mean
+- exact slot number, or
+- relative display ordering?
+
+If it means relative ordering, gaps are fine.
+If it means exact slot index in a fixed-size grid, then failure means that slot stays empty.
+
+For most gallery/listing systems, relative ordering is enough, so gaps are not a real problem.
+
+*** It means relative display order - but then my question would be, how does the client know which sort order to start at for new uploads? I guess it wouldn't need to know.. it actually wouldn't need to know sort order at all because it should always append on upload. But, then my question is, how do i handle when the user selects say 20 photos at once, and the client asynchronously uploads them to aws and then sends the post request to the server, so the server is handling the requests at the same time. It seems like it that case, maybe just using the array order is indeed better. But, then I want the user to have the ability to drag/drop photos to change the order.. so then they would actually be moving array items around on the listing which seems non ideal. Maybe I just set the initial sort order to the size of the listing photos array before the item is pushed
+
+Yes — that’s the usual answer: assign initial sort order on the server, not the client.
+
+For concurrent uploads, the client should not try to guess final persisted order from “current number of photos,” because parallel requests race.
+
+Good approach:
+
+1. Client uploads temp files
+2. Client sends finalize/add-photo requests
+3. Server assigns sort order when inserting
+
+If you want “append in the order the user selected files”, then the client should send a stable /selection index/ or /batch index/, not final sort_order.
+
+Example:
+- user selects 20 photos
+- client records indices 0..19 in selection order
+- each async request sends:
+  - temp key
+  - batch id
+  - batch index
+
+Then server can insert consistently based on that metadata, or finalize the whole batch at once.
+
+Because if you do 20 independent concurrent “append” requests, whichever request reaches the server first gets inserted first, which may not match selection order.
+
+So you have two real options:
+
+Option A: finalize whole batch in one request
+Best if you care about preserving the user’s selected order.
+
+Client sends one request:
+- listing id
+- array of temp keys in desired order
+
+Server:
+- processes them
+- appends them in that order
+- assigns sort_order accordingly
+
+This is the cleanest.
+
+Option B: independent requests, but include ordering metadata
+Each request includes:
+- batch id
+- batch index
+
+Then server can later sort/merge by that.
+More complicated.
+
+About drag/drop later:
+yes, that is exactly where explicit sort_order helps.
+Do /not/ rely on Mongo array order as your long-term ordering model if users can reorder.
+
+Because then reordering means rewriting array positions, which is possible but clumsier.
+
+Better:
+- each photo has stable identity
+- each photo has sort_order
+- rendering sorts by sort_order
+- drag/drop sends updated sort_order values
+
+So I would recommend:
+
+- store photos as array items in Mongo, that’s fine
+- but each photo has:
+  - id or aws_key
+  - sort_order
+- initial sort_order assigned by server
+- later drag/drop updates sort_order
+
+For your concurrent multi-upload case, best design is probably:
+
+- after temp uploads complete, client sends one finalize request containing all new photo temp keys in intended order
+- server sanitizes/uploads/saves them in that order
+- initial sort_order starts at existing photo count and increments
+
+Like:
+
+- existing count = 5
+- 3 new photos arrive in desired order
+- assign sort orders 5, 6, 7
+
+That is much simpler than 20 separate concurrent finalize requests.
+
+So:
+- yes, “size of current photos array before push” is a reasonable basis
+- but only if you are processing a batch coherently, not racing many independent requests
+- and yes, explicit sort_order is still better than relying on array position once reordering exists
+
+*** Okay say I go the single batch route - I upload all photos to tmp sorage on s3 and then send single request to our server.. the result swaps the entire thumbs div and oob an swaps any errors, preserving thumbs (somehow? maybe using original filename) for error docs so its clear which ones failed.
+1) How do I get the selection "order" on the client? Is that easily obtainable (for both clicking the drop element which brings up a file browser and dragging a group of photos)
+
+2) How should I send that "array" of image infos? Could this still go in query params?
+
+3) To use htmx swap, should I somehow embed this request in a form? How would I add custom data to the request (such as sort order per image for example, and not actually transfer the file data but instead just the aws keys)? Or can I use fetch with htmx?
+
+1. Selection order  
+Yes, usually easy.
+
+- File input: =input.files= preserves the browser’s file list order
+- Drag/drop: =event.dataTransfer.files= gives a =FileList= in an order, usually the drag selection order as provided by the OS/browser
+
+So in practice, you can turn that into an array immediately and record:
+
+- original index
+- filename
+- temp aws key after upload
+
+Example idea:
+
+#+begin_src js
+const files = Array.from(input.files ?? []);
+const items = files.map((file, index) => ({
+  file,
+  selection_index: index,
+  original_name: file.name,
+}));
+#+end_src
+
+Do the same for drop:
+
+#+begin_src js
+const files = Array.from(event.dataTransfer?.files ?? []);
+#+end_src
+
+If you want to be safest, capture that order immediately client-side and keep it yourself; don’t rely on anything later.
+
+2. How to send the array  
+Do not use query params for this.
+
+Use a JSON request body.
+
+Something like:
+
+#+begin_src json
+{
+  "photos": [
+    {
+      "tmp_key": "tmp/abc",
+      "original_name": "kitchen.jpg",
+      "selection_index": 0
+    },
+    {
+      "tmp_key": "tmp/def",
+      "original_name": "front.jpg",
+      "selection_index": 1
+    }
+  ]
+}
+#+end_src
+
+Query params are a poor fit because:
+
+- arrays/objects get awkward
+- length limits
+- harder to validate
+- uglier endpoint design
+
+So I’d use:
+
+- =POST /listings/:id/photos/finalize=
+- JSON body with ordered photo info array
+
+3. HTMX / form / custom data  
+You do /not/ need to send actual file data in the finalize request if files are already in temp S3.
+
+That means the finalize request is just normal metadata, so JSON is a good fit.
+
+HTMX is not great at sending rich arbitrary JSON bodies by itself compared to plain =fetch=. It shines more with form-style requests and HTML swaps.
+
+So honestly, for this flow I’d consider:
+
+- use JS /=fetch=/ for temp uploads + finalize JSON request
+- then take returned HTML and replace the thumbs container yourself
+
+or
+
+- use JS to set hidden form inputs and submit with HTMX
+- but that gets clunkier for arrays of objects
+
+If you want to keep HTMX swapping behavior, there are a few options:
+
+Option A: use =fetch=, then manually swap returned HTML
+This is often simplest.
+
+Example:
+- =fetch("/listings/123/photos/finalize", { method: "POST", body: JSON.stringify(...) })=
+- server returns HTML fragment for thumbs container plus maybe OOB fragments
+- inject it yourself, though OOB handling is not automatic unless you manually invoke HTMX processing
+
+Option B: use HTMX extension/config to send JSON
+Possible, but more setup.
+
+Option C: use a form with hidden inputs
+For example:
+
+#+begin_src html
+<input type="hidden" name="photos[0][tmp_key]" value="tmp/abc">
+<input type="hidden" name="photos[0][original_name]" value="kitchen.jpg">
+<input type="hidden" name="photos[0][selection_index]" value="0">
+#+end_src
+
+Then HTMX can post the form and swap the returned HTML naturally.
+
+This works, but for lots of photos it’s a bit ugly.
+
+My recommendation
+Given your flow:
+
+- temp upload files with JS
+- keep an array in JS with:
+  - tmp_key
+  - original_name
+  - selection_index
+- send one finalize =POST= with JSON
+- server returns:
+  - updated thumbs container HTML
+  - OOB error fragments for failed photos, if any
+
+If you really want HTMX swap/OOB behavior from that response, the nicest path is often:
+- submit via HTMX using hidden form fields
+- or use fetch and then manually update DOM
+
+If the point is “server returns HTML and I want HTMX-like swapping,” then a hidden form is the most HTMX-native way.
+
+A concrete good design:
+
+Client:
+- user selects files
+- build ordered JS array
+- upload each to temp S3
+- after uploads finish, create hidden form fields for temp keys + names + indices
+- HTMX POST that form to =/listings/:id/photos/finalize=
+- target =#thumbs=
+- swap =outerHTML= or =innerHTML=
+- server can also return OOB error rows/messages
+
+Why include original_name
+Yes, useful for error reporting:
+- “Failed to process kitchen.jpg”
+- especially if some in the batch fail
+
+Summary:
+1. order is available from =FileList= order; capture it immediately
+2. send the batch in request body, not query params
+3. for HTMX swapping, easiest HTMX-native method is a form with hidden inputs; easiest engineering method is probably =fetch= with JSON
+
+If you want, I can sketch:
+- the hidden-input form shape for HTMX
+- or the fetch-based flow with server-returned HTML fragment
+
+*** So it sounds like this would best flow as an API json response instead of htmx web request - and I would just use the result to render the html
+
+Yes — for this particular flow, that’s probably the better design.
+
+Why:
+- you already have client-side JS managing temp uploads
+- you need to send structured batch data
+- you may want per-file success/failure info
+- JSON is much easier for that than forcing it through HTMX form semantics
+
+So a good split is:
+
+- upload/finalize flow → JSON API
+- server returns structured result
+- client updates/renders the thumbnail HTML
+
+That is often cleaner than trying to make HTMX do everything.
+
+A reasonable response shape:
+
+#+begin_src json
+{
+  "ok": true,
+  "photos": [
+    {
+      "id": "...",
+      "thumb_url": "...",
+      "main_url": "...",
+      "sort_order": 3
+    }
+  ],
+  "errors": [
+    {
+      "original_name": "kitchen.jpg",
+      "message": "Failed to process image"
+    }
+  ]
+}
+#+end_src
+
+Or even better, return the canonical full photo list data the client needs to render.
+
+Then client:
+- replaces the thumbs container contents
+- renders any errors into your error area
+
+That avoids tricky HTMX questions like:
+- empty main swap + OOB
+- mixed success/error fragments
+- preserving per-file failure context in HTML fragments
+
+So yes: for a batch finalize workflow with temp S3 uploads, JSON API + client render is probably the best fit.
+
+*** Are there any client side javascript htmx functions available for DOM manipulation?
+
+Yes, a few, but HTMX is not really a DOM manipulation library in the jQuery sense.
+
+Useful client-side HTMX functions include:
+
+- =htmx.ajax(...)= — make an HTMX-style request
+- =htmx.process(element)= — process HTMX attributes on newly added DOM
+- =htmx.trigger(element, eventName, detail?)=
+- =htmx.find(selector)=
+- =htmx.findAll(selector)=
+- =htmx.closest(element, selector)=
+- =htmx.remove(element)=
+- =htmx.addClass(element, className, delay?)=
+- =htmx.removeClass(element, className, delay?)=
+- =htmx.toggleClass(element, className)=
+- =htmx.swap(...)= — lower-level, less commonly used directly
+
+But for ordinary DOM manipulation, native DOM APIs are usually better/clearer:
+
+- =element.innerHTML =
+- =element.replaceWith(...)=
+- =element.remove()=
+- =insertAdjacentHTML(...)=
+- =querySelector(...)=
+
+So if you’re asking “can I use HTMX JS helpers instead of raw DOM APIs?”:
+- yes, a little
+- but HTMX is not meant to be your main DOM utility toolkit
+
+If you want to take server-returned HTML and put it somewhere, native DOM methods are usually simplest. If you want HTMX to activate any =hx-= attributes in the inserted HTML, call:
+
+#+begin_src js
+htmx.process(newElementOrContainer);
+#+end_src
+
+If you want, I can show the cleanest way to insert server-returned thumbnail HTML and then let HTMX wire it up.
+
+*** I think what I'm trying to ask is if there is anyway to manually call hx-post with hx-swap attributes set without a form
+
+Yes.
+
+The main client-side way is =htmx.ajax()=.
+
+It lets you make an HTMX request from JS and specify the target/swap behavior without needing a form element.
+
+Example:
+
+#+begin_src js
+htmx.ajax("POST", "/your-endpoint", {
+  target: "#thumbs",
+  swap: "innerHTML",
+  values: {
+    foo: "bar"
+  }
+});
+#+end_src
+
+So that is basically the programmatic equivalent of an =hx-post= request.
+
+A few notes:
+
+- =values= sends form-style parameters, not a raw JSON body
+- target/swap can be specified in the options
+- response is handled by HTMX, including swaps and OOB processing
+
+If you need to send actual JSON, =htmx.ajax()= is less convenient than =fetch=. HTMX is much happier with form-encoded request data.
+
+So:
+
+- want programmatic HTMX request with swap behavior? use =htmx.ajax()=
+- want rich JSON body? =fetch= is often easier
+
+If you want, I can show how to send your photo batch through =htmx.ajax()= either as form values or as JSON-ish payload.
+
+*** Can you use a json payload with htmx.ajax?
+
+Not nicely by default.
+
+=htmx.ajax()= is primarily built around HTMX/form-style parameter submission, not raw JSON bodies.
+
+You /can/ force JSON by setting headers and using the =body= option, but at that point it starts feeling more like using =fetch=.
+
+Roughly:
+
+#+begin_src js
+htmx.ajax("POST", "/endpoint", {
+  target: "#thumbs",
+  swap: "innerHTML",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    photos: [...]
+  })
+});
+#+end_src
+
+But HTMX is not especially designed around this style, and depending on version/setup, =body= support may not be as straightforward/reliable as just using =fetch=.
+
+So practical answer:
+
+- yes, maybe, with manual config
+- but if you want to send JSON, just use =fetch=
+- if you want HTMX’s swap behavior, use form-style values or a real form
+
+For your use case, =fetch(...json...)= is probably the cleaner tool.
+
+*** What would values look like if I wanted to include my array of photos?
+
+With HTMX =values=, you’re basically sending form-style fields, so arrays of objects need to be flattened into field names.
+
+For example, if you have:
+
+#+begin_src js
+photos = [
+  { tmp_key: "tmp/a", original_name: "a.jpg", selection_index: 0 },
+  { tmp_key: "tmp/b", original_name: "b.jpg", selection_index: 1 }
+]
+#+end_src
+
+you’d send something like:
+
+#+begin_src js
+htmx.ajax("POST", "/listings/123/photos/finalize", {
+  target: "#thumbs",
+  swap: "innerHTML",
+  values: {
+    "photos[0][tmp_key]": "tmp/a",
+    "photos[0][original_name]": "a.jpg",
+    "photos[0][selection_index]": "0",
+
+    "photos[1][tmp_key]": "tmp/b",
+    "photos[1][original_name]": "b.jpg",
+    "photos[1][selection_index]": "1"
+  }
+});
+#+end_src
+
+That is the form-encoding style.
+
+Whether your server parses that automatically into nested objects depends on your body/query parser. Sometimes it stays as flat string keys unless you use a parser that understands bracket notation.
+
+Alternative hack:
+send one JSON string field:
+
+#+begin_src js
+htmx.ajax("POST", "/listings/123/photos/finalize", {
+  target: "#thumbs",
+  swap: "innerHTML",
+  values: {
+    photos_json: JSON.stringify(photos)
+  }
+});
+#+end_src
+
+Then server parses:
+
+#+begin_src ts
+const photos = JSON.parse(request.body.photos_json);
+#+end_src
+
+That is often simpler than flattening every nested field if you insist on HTMX.
+
+So options with =values=:
+
+1. Flatten fields with bracket notation
+2. Send a single JSON string field
+
+For your case, if using HTMX, I’d probably do:
+
+#+begin_src js
+values: {
+  photos_json: JSON.stringify(photos)
+}
+#+end_src
+
+But again, at that point, =fetch= with real JSON is usually cleaner.
+
+*** If I used the ajax request with photos_json trick, where would that be available in fastify? In query params?
+
+No — for an =htmx.ajax(..., { values: ... })= =POST=, it would normally be in the request body, not query params.
+
+So in Fastify you’d look in:
+
+#+begin_src ts
+request.body
+#+end_src
+
+For example:
+
+#+begin_src ts
+const body = request.body as { photos_json?: string };
+
+if (!body.photos_json) {
+    throw make_http_error("Missing photos_json", 400);
+}
+
+const photos = JSON.parse(body.photos_json);
+#+end_src
+
+It would only be in query params if you were making a =GET= request or explicitly put it in the URL.
+
+So:
+
+- =POST + values= → body
+- =GET + values= → query string
+
+For your finalize route, use =POST=, so expect it in =request.body=.
+
+*** So those don't need url encoding then
+
+They still do get encoded, just not as URL query parameters.
+
+With HTMX form-style =POST= values, the data is typically sent as form-encoded body data, like:
+
+- =application/x-www-form-urlencoded=
+  or sometimes
+- =multipart/form-data=
+
+So the value of =photos_json= will be encoded for transport in the request body.
+
+But that encoding/decoding is handled for you by the browser/HTMX and Fastify’s body parser.
+
+So practically:
+
+- yes, it is encoded
+- no, you usually do not need to manually URL-encode it
+
+You just send:
+
+#+begin_src js
+values: {
+  photos_json: JSON.stringify(photos)
+}
+#+end_src
+
+and read:
+
+#+begin_src ts
+request.body.photos_json
+#+end_src
+
+as a normal string.
+
+*** How would I pull out this array using typescript?
+
+Assuming you sent:
+
+#+begin_src js
+values: {
+  photos_json: JSON.stringify(photos)
+}
+#+end_src
+
+then in Fastify you’d read the body field as a string and parse it.
+
+Example:
+
+#+begin_src ts
+type IncomingPhoto = {
+    tmp_key: string;
+    original_name: string;
+    selection_index: number;
+};
+
+type FinalizePhotosBody = {
+    photos_json: string;
+};
+
+async function handler(
+    request: FastifyRequest<{ Body: FinalizePhotosBody }>
+) {
+    const parsed: unknown = JSON.parse(request.body.photos_json);
+
+    if (!Array.isArray(parsed)) {
+        throw make_http_error("photos_json must be an array", 400);
+    }
+
+    const photos = parsed as IncomingPhoto[];
+}
+#+end_src
+
+If you want to be safer, validate each item instead of just casting:
+
+#+begin_src ts
+function is_incoming_photo(x: unknown): x is IncomingPhoto {
+    return !!x &&
+        typeof x === "object" &&
+        "tmp_key" in x &&
+        "original_name" in x &&
+        "selection_index" in x &&
+        typeof (x as any).tmp_key === "string" &&
+        typeof (x as any).original_name === "string" &&
+        typeof (x as any).selection_index === "number";
+}
+
+async function handler(
+    request: FastifyRequest<{ Body: FinalizePhotosBody }>
+) {
+    const parsed: unknown = JSON.parse(request.body.photos_json);
+
+    if (!Array.isArray(parsed) || !parsed.every(is_incoming_photo)) {
+        throw make_http_error("Invalid photos_json", 400);
+    }
+
+    const photos: IncomingPhoto[] = parsed;
+}
+#+end_src
+
+So the core extraction is:
+
+#+begin_src ts
+const parsed: unknown = JSON.parse(request.body.photos_json);
+if (!Array.isArray(parsed)) { ... }
+const photos = parsed as IncomingPhoto[];
+#+end_src
+
+If you want, I can show how to type the full Fastify route definition for this cleanly.
+
+*** Why unknown instead of any?
+
+Because =unknown= is safe and =any= turns off type checking.
+
+With =JSON.parse(...)=, you do /not/ actually know what came back. It could be:
+
+- array
+- object
+- string
+- number
+- =null=
+
+So =unknown= is the honest type: “something, but not yet validated.”
+
+Example:
+
+#+begin_src ts
+const parsed: unknown = JSON.parse(request.body.photos_json);
+#+end_src
+
+Now TypeScript forces you to check it before using it.
+
+If you used =any=:
+
+#+begin_src ts
+const parsed: any = JSON.parse(request.body.photos_json);
+#+end_src
+
+then TS would let you do unsafe things like:
+
+#+begin_src ts
+parsed[0].tmp_key.toUpperCase()
+#+end_src
+
+even if =parsed= was actually =null= or a number.
+
+So:
+
+- =any= → “trust me, don’t check anything”
+- =unknown= → “I don’t know yet; make me narrow/validate it”
+
+For parsed JSON from users, =unknown= is almost always the better choice.
+
+*** But I control the client.. although I guess any programmer could try to hijack the endpoint.. but they would have to be authenticated...
+
+Right — “I control the client” helps, but it’s still not a good reason to trust request data blindly.
+
+Reasons:
+
+- bugs in your own client can send malformed data
+- stale clients / old tabs can send old formats
+- authenticated users can still send handcrafted requests
+- browser extensions, proxies, scripts, or accidental misuse can alter requests
+- your server code is the trust boundary
+
+So yes, authentication limits /who/ can call it, but not whether the body is well-formed.
+
+That’s why =unknown= is still the better habit for parsed JSON from requests.
+
+In practice:
+
+- if this is internal quick code, a cast may be acceptable
+- if this is a real endpoint, validate it
+
+So something like:
+
+#+begin_src ts
+const parsed: unknown = JSON.parse(request.body.photos_json);
+#+end_src
+
+is just the safer and more correct starting point, even if your own frontend is the main caller.
+
+*** Why not parsed instanceof Array?
+
+Because arrays are not instances of =Array= in every possible JS realm, and the standard correct check is:
+
+#+begin_src ts
+Array.isArray(parsed)
+#+end_src
+
+That’s the recommended way.
+
+Why not =instanceof Array=:
+
+- can fail across realms/contexts (different window/frame/global objects)
+- =Array.isArray(...)= is the built-in robust array check
+
+So use:
+
+#+begin_src ts
+if (!Array.isArray(parsed)) {
+    throw make_http_error("photos_json must be an array", 400);
+}
+#+end_src
+
+not:
+
+#+begin_src ts
+if (!(parsed instanceof Array)) { ... }
+#+end_src
+
+In Node server code, =instanceof Array= often works, but =Array.isArray= is still the proper choice.
+
+***
+
+function is_incoming_photo(x: unknown): x is IncomingPhoto {
+    return !!x &&
+        typeof x === "object" &&
+        "tmp_key" in x &&
+        "original_name" in x &&
+        "selection_index" in x &&
+        typeof (x as any).tmp_key === "string" &&
+        typeof (x as any).original_name === "string" &&
+        typeof (x as any).selection_index === "number";
+}
+This function is confusing - why is the return type "x is IncomingPhoto" instead of just boolean?
+
+Because it’s a /type predicate/.
+
+It still returns a boolean at runtime, but the special return type tells TypeScript:
+
+“If this function returns true, then treat =x= as =IncomingPhoto=.”
+
+So:
+
+#+begin_src ts
+function is_incoming_photo(x: unknown): x is IncomingPhoto
+#+end_src
+
+means:
+
+- runtime: returns true/false
+- type system: true implies =x= has type =IncomingPhoto=
+
+That lets TS narrow types:
+
+#+begin_src ts
+if (is_incoming_photo(parsed)) {
+    // here parsed is treated as IncomingPhoto
+    console.log(parsed.tmp_key);
+}
+#+end_src
+
+If it just returned =boolean=:
+
+#+begin_src ts
+function is_incoming_photo(x: unknown): boolean
+#+end_src
+
+then TypeScript would /not/ narrow =x= afterward, even if the logic is the same.
+
+So:
+
+- =boolean= → only runtime info
+- =x is IncomingPhoto= → runtime info + compile-time narrowing
+
+That syntax exists specifically for validator-style functions like this.
+
+*** Okay - what does !!x mean?
+
+=!!x= converts a value to a real boolean.
+
+It means:
+
+- first =!x= makes it true/false inverted
+- second =!= flips it back
+- result is the truthiness of =x= as a boolean
+
+Examples:
+
+#+begin_src ts
+!!"abc"   // true
+!!0       // false
+!!null    // false
+!!{}      // true
+#+end_src
+
+In your function:
+
+#+begin_src ts
+return !!x && typeof x === "object" && ...
+#+end_src
+
+that is basically making sure =x= is not something falsy like:
+
+- =null=
+- =undefined=
+- =0=
+- =""
+- =false=
+
+The most relevant one here is =null=, because:
+
+#+begin_src ts
+typeof null === "object"
+#+end_src
+
+which is annoying JS behavior.
+
+So =!!x && typeof x === "object"= is a common way to mean:
+
+- x exists
+- and is an object
+
+You could also write it more explicitly as:
+
+#+begin_src ts
+x !== null && typeof x === "object"
+#+end_src
+
+which is often clearer.
+
+*** why not x instanceof Object?
+
+Because =instanceof Object= is not the right check for “plain unknown object-like value” in JS/TS.
+
+Problems:
+
+1. It’s less precise for validation
+You usually want to know:
+- not =null=
+- type is object
+
+This is clearer:
+
+#+begin_src ts
+x !== null && typeof x === "object"
+#+end_src
+
+2. =instanceof= has cross-realm issues
+Just like with arrays, =instanceof Object= can fail for objects created in another realm/context.
+
+3. It mixes in JS prototype semantics
+=instanceof Object= is about prototype chains, not really “is this a non-null object value I can inspect safely?”
+
+Also, functions are objects in JS, and =instanceof Object= can behave in ways that are not what you mean for data validation.
+
+For request JSON validation, the standard safe pattern is:
+
+#+begin_src ts
+typeof x === "object" && x !== null
+#+end_src
+
+That’s the usual way to say:
+“this is some non-null object-like value.”
+
+So short answer:
+- =instanceof Object= sometimes works
+- but =typeof x === "object" && x !== null= is the standard, clearer, safer validation check
+
+*** What about for arrays then using typeof x === "array"?
+
+Because that doesn’t exist in JavaScript.
+
+For arrays:
+
+#+begin_src ts
+typeof []   // "object"
+#+end_src
+
+not ="array"=.
+
+So:
+
+- objects → =typeof x === "object"=
+- arrays → =Array.isArray(x)=
+
+That’s why arrays need their own special check.
+
+Examples:
+
+#+begin_src ts
+typeof []          // "object"
+typeof {}          // "object"
+typeof null        // "object"   // annoying JS quirk
+Array.isArray([])  // true
+Array.isArray({})  // false
+#+end_src
+
+So to check array:
+
+#+begin_src ts
+if (Array.isArray(x)) {
+    ...
+}
+#+end_src
+
+not:
+
+#+begin_src ts
+typeof x === "array"   // never true
+#+end_src
+
+*** 
