@@ -98,36 +98,38 @@ function generate_photo_aws_key(listing_id: string, content_type: string): strin
 }
 
 type uploaded_photo_info = {
-    tmp_key: string,
-    orig_fname: string
+    tmp_key: string;
+    orig_fname: string;
 };
 
 type push_listing_body = {
-    photos_json: string
+    photos_json: string;
 };
 
 function is_uploaded_photo_info(val: unknown): val is uploaded_photo_info {
-    return (!!val && typeof val === "object" && )
+    return (
+        !!val &&
+        typeof val === "object" &&
+        "tmp_key" in val &&
+        typeof val.tmp_key === "string" &&
+        "orig_fname" in val &&
+        typeof val.orig_fname === "string"
+    );
 }
 
-
-async function handle_push_listing_photo(request: FastifyRequest<route_params>, reply: FastifyReply) {
-    const listings = mongo.get_listings();
-    const { id } = request.params;
-    const listing = await get_listing(id, listings);
-    const parsed: unknown = request.body;
-    if (!Array.isArray(parsed) || parsed.every(val => val instanceof uploaded_photo_info)) {
-        
-    }
-    
-    const { file, content_type } = await aws.download_from_s3(request.query.key);
+async function finalize_photo(
+    pinfo: uploaded_photo_info,
+    order: number,
+    listing_id: string
+): Promise<ss_listing_photo> {
+    const { file, content_type } = await aws.download_from_s3(pinfo.tmp_key);
 
     // Remove image from aws - continue even if removal fails
     try {
-        await aws.delete_from_s3(request.query.key);
+        await aws.delete_from_s3(pinfo.tmp_key);
     } catch (err: any) {
         const err_msg = err instanceof Error ? ":" + err.message : "";
-        elog(`Failed to delete temp upload ${request.query.key}${err_msg} - need to fix`);
+        elog(`Failed to delete temp upload ${pinfo.tmp_key}${err_msg} - need to fix`);
     }
 
     if (!verify_buffer_is_image(Buffer.from(file))) {
@@ -140,10 +142,10 @@ async function handle_push_listing_photo(request: FastifyRequest<route_params>, 
     const THUMB_PHOTO_IND = 2;
 
     const main = sanitize_image(file, 1600, 1600, { fit: "inside", withoutEnlargement: true });
-    proms[MAIN_PHOTO_IND]= main;
+    proms[MAIN_PHOTO_IND] = main;
 
     const card = sanitize_image(file, 400, 400, { fit: "cover", position: "centre", withoutEnlargement: true });
-    proms[CARD_PHOTO_IND] = (card);
+    proms[CARD_PHOTO_IND] = card;
 
     const thumb = sanitize_image(file, 96, 96, { fit: "cover", position: "centre", withoutEnlargement: true });
     proms[THUMB_PHOTO_IND] = thumb;
@@ -151,15 +153,10 @@ async function handle_push_listing_photo(request: FastifyRequest<route_params>, 
     // allSettled only throws for things like syntax errors and such
     const all_results = await Promise.allSettled(proms);
 
-    type data_key = { data: Buffer; key: string; content_type: string };
-
     // Basically filter and map in one call to get our results to a list of only things that succeeded
-    const san_results = all_results.reduce<data_key[]>((acc, r) => {
-        if (r.status === "fulfilled") {
-            acc.push({ data: r.value, key: generate_photo_aws_key(listing._id, content_type), content_type });
-        }
-        return acc;
-    }, []);
+    const san_results = all_results
+        .filter((r) => r.status === "fulfilled")
+        .map((r) => ({ data: r.value, key: generate_photo_aws_key(listing_id, content_type), content_type }));
 
     // If all didn't succeed sanitizing then error
     if (san_results.length !== all_results.length) {
@@ -173,22 +170,14 @@ async function handle_push_listing_photo(request: FastifyRequest<route_params>, 
     });
 
     const all_upload_results = await Promise.allSettled(upload_proms);
-    const uploads_succeeded = all_upload_results.reduce<string[]>((acc, r) => {
-        if (r.status === "fulfilled") {
-            acc.push(r.value);
-        }
-        return acc;
-    }, []);
+    const uploads_succeeded = all_upload_results.filter((r) => r.status === "fulfilled").map((r) => r.value);
 
     // There's nothing more we can really do here other than log the failure
     const delete_aws_keys = async (keys: string[]) => {
         // Delete the successful uploads and return
         const del_proms = keys.map((r) => aws.delete_from_s3(r));
         const results = await Promise.allSettled(del_proms);
-        const failed = results.reduce<string[]>((arr, r) => {
-            if (r.status === "rejected") arr.push(r.reason);
-            return arr;
-        }, []);
+        const failed = results.filter((r) => r.status === "rejected").map((r) => r.reason);
         if (failed.length > 0) elog(`Failed to delete the following photo keys: ${failed.join(", ")}`);
     };
 
@@ -199,26 +188,71 @@ async function handle_push_listing_photo(request: FastifyRequest<route_params>, 
     }
 
     // Finally, update the listing and save
-    const new_photo: ss_listing_photo = {
+    return {
         id: randomUUID(),
         aws_keys: {
             main: uploads_succeeded[MAIN_PHOTO_IND]!,
             card: uploads_succeeded[CARD_PHOTO_IND]!,
-            thumb: uploads_succeeded[THUMB_PHOTO_IND]!
+            thumb: uploads_succeeded[THUMB_PHOTO_IND]!,
         },
-        sort_order: request.query.order
+        sort_order: order,
     };
-    
-    const result = await listings.updateOne(
-        { _id: listing._id },
-        {
-            $push: {
-                photos: new_photo
-            }
+}
+
+async function handle_push_listing_photo(request: FastifyRequest<route_params>, reply: FastifyReply) {
+    const listings = mongo.get_listings();
+    const { id } = request.params;
+    const listing = await get_listing(id, listings);
+    const parsed: unknown = request.body;
+    if (!Array.isArray(parsed) || !parsed.every((val) => is_uploaded_photo_info(val))) {
+        // Invalid input format
+    }
+
+    const photo_proms = (parsed as uploaded_photo_info[]).map((upload_item, ind) => {
+        return finalize_photo(upload_item, listing.photos.length + ind, listing._id);
+    });
+    const photo_results = await Promise.allSettled(photo_proms);
+    const errs = photo_results.filter((r) => r.status === "rejected").map((r) => r.reason);
+    const new_photos = photo_results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+
+    if (new_photos.length > 0) {
+        // This crazyness basically adds the items to the end of the photos array and sets the
+        // sort order based on the index of the item + the base index of the photos array at the time this insert is happening
+        const result = await listings.updateOne({ _id: listing }, [
+            {
+                $set: {
+                    photos: {
+                        $let: {
+                            vars: {
+                                existingPhotos: { $ifNull: ["$photos", []] },
+                                startIndex: { $size: { $ifNull: ["$photos", []] } },
+                            },
+                            in: {
+                                $concatArrays: [
+                                    "$$existingPhotos",
+                                    {
+                                        $map: {
+                                            input: { $range: [0, new_photos.length] },
+                                            as: "idx",
+                                            in: {
+                                                $mergeObjects: [
+                                                    { $arrayElemAt: [new_photos, "$$idx"] },
+                                                    { sort_order: { $add: ["$$startIndex", "$$idx"] } },
+                                                ],
+                                            },
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                },
+            },
+        ]);
+
+        if (result.matchedCount === 0) {
+            // return error fragment and remove uploaded photos
         }
-    );
-    if (result.matchedCount === 0) {
-        // return error fragment
     }
     // return success fragment
 }
