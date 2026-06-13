@@ -72,9 +72,33 @@ async function get_listing(id: string, listings: Collection<ss_listing>): Promis
     }
 }
 
-type route_params = { Params: { id: string } };
+type post_listing_add_photos_item = {
+    tmp_key: string;
+    orig_fname: string;
+};
 
-async function handle_get_edit_listing_by_id(request: FastifyRequest<route_params>, reply: FastifyReply) {
+type rts_get_listing = { Params: { id: string } };
+
+type rts_post_listing_add_photos = {
+    Params: { id: string };
+    Body: post_listing_add_photos_item[];
+};
+
+const post_listing_photo_body_schema = {
+    body: {
+        type: "array",
+        items: {
+            required: ["tmp_key", "orig_fname"],
+            additionalProperties: false,
+            properties: {
+                tmp_key: { type: "string", minLength: 1 },
+                orig_fname: { type: "string", minLength: 1 },
+            },
+        },
+    },
+} as const;
+
+async function handle_get_edit_listing_by_id(request: FastifyRequest<rts_get_listing>, reply: FastifyReply) {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
@@ -97,128 +121,122 @@ function generate_photo_aws_key(listing_id: string, content_type: string): strin
     return config.aws.s3_listing_pics_pf + "/" + listing_id + "." + ext_from_content_type(content_type);
 }
 
-type uploaded_photo_info = {
-    tmp_key: string,
-    orig_fname: string
-};
+// type push_listing_body = {
+//     photos_json: string
+// };
 
-type push_listing_body = {
-    photos_json: string
-};
+// function is_uploaded_photo_info(val: unknown): val is uploaded_photo_info {
+//     return (!!val && typeof val === "object" && )
+// }
 
-function is_uploaded_photo_info(val: unknown): val is uploaded_photo_info {
-    return (!!val && typeof val === "object" && )
-}
-
-
-async function handle_push_listing_photo(request: FastifyRequest<route_params>, reply: FastifyReply) {
+async function handle_push_listing_photo(request: FastifyRequest<rts_post_listing_add_photos>, reply: FastifyReply) {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
-    const parsed: unknown = request.body;
-    if (!Array.isArray(parsed) || parsed.every(val => val instanceof uploaded_photo_info)) {
-        
-    }
-    
-    const { file, content_type } = await aws.download_from_s3(request.query.key);
+    const photo_items: post_listing_add_photos_item[] = request.body;
 
-    // Remove image from aws - continue even if removal fails
-    try {
-        await aws.delete_from_s3(request.query.key);
-    } catch (err: any) {
-        const err_msg = err instanceof Error ? ":" + err.message : "";
-        elog(`Failed to delete temp upload ${request.query.key}${err_msg} - need to fix`);
-    }
+    for (let i = 0; i < photo_items.length; ++i) {
+        const photo_item = photo_items[i]!;
+        const { file, content_type } = await aws.download_from_s3(photo_item.tmp_key);
 
-    if (!verify_buffer_is_image(Buffer.from(file))) {
-        // Return some error fragment
-    }
-
-    const proms: Promise<Buffer>[] = [];
-    const MAIN_PHOTO_IND = 0;
-    const CARD_PHOTO_IND = 1;
-    const THUMB_PHOTO_IND = 2;
-
-    const main = sanitize_image(file, 1600, 1600, { fit: "inside", withoutEnlargement: true });
-    proms[MAIN_PHOTO_IND]= main;
-
-    const card = sanitize_image(file, 400, 400, { fit: "cover", position: "centre", withoutEnlargement: true });
-    proms[CARD_PHOTO_IND] = (card);
-
-    const thumb = sanitize_image(file, 96, 96, { fit: "cover", position: "centre", withoutEnlargement: true });
-    proms[THUMB_PHOTO_IND] = thumb;
-
-    // allSettled only throws for things like syntax errors and such
-    const all_results = await Promise.allSettled(proms);
-
-    type data_key = { data: Buffer; key: string; content_type: string };
-
-    // Basically filter and map in one call to get our results to a list of only things that succeeded
-    const san_results = all_results.reduce<data_key[]>((acc, r) => {
-        if (r.status === "fulfilled") {
-            acc.push({ data: r.value, key: generate_photo_aws_key(listing._id, content_type), content_type });
+        // Remove image from aws - continue even if removal fails
+        try {
+            await aws.delete_from_s3(photo_item.tmp_key);
+        } catch (err: any) {
+            const err_msg = err instanceof Error ? ":" + err.message : "";
+            elog(`Failed to delete temp upload ${photo_item.tmp_key}${err_msg} - need to fix`);
         }
-        return acc;
-    }, []);
 
-    // If all didn't succeed sanitizing then error
-    if (san_results.length !== all_results.length) {
-        // Return some error fragment
-    }
-
-    // Everything worked - lets do the upload
-    const upload_proms = san_results.map(async (r) => {
-        await aws.upload_to_s3(r.key, r.data, r.content_type);
-        return r.key;
-    });
-
-    const all_upload_results = await Promise.allSettled(upload_proms);
-    const uploads_succeeded = all_upload_results.reduce<string[]>((acc, r) => {
-        if (r.status === "fulfilled") {
-            acc.push(r.value);
+        if (!verify_buffer_is_image(Buffer.from(file))) {
+            // Return some error fragment
         }
-        return acc;
-    }, []);
 
-    // There's nothing more we can really do here other than log the failure
-    const delete_aws_keys = async (keys: string[]) => {
-        // Delete the successful uploads and return
-        const del_proms = keys.map((r) => aws.delete_from_s3(r));
-        const results = await Promise.allSettled(del_proms);
-        const failed = results.reduce<string[]>((arr, r) => {
-            if (r.status === "rejected") arr.push(r.reason);
-            return arr;
-        }, []);
-        if (failed.length > 0) elog(`Failed to delete the following photo keys: ${failed.join(", ")}`);
-    };
+        const proms: Promise<Buffer>[] = [];
+        const MAIN_PHOTO_IND = 0;
+        const CARD_PHOTO_IND = 1;
+        const THUMB_PHOTO_IND = 2;
 
-    // If not all uploads succeeded, we need to delete the successful ones
-    if (uploads_succeeded.length !== all_upload_results.length) {
-        await delete_aws_keys(uploads_succeeded);
-        // Return some error fragment
-    }
+        const main = sanitize_image(file, 1600, 1600, { fit: "inside", withoutEnlargement: true });
+        proms[MAIN_PHOTO_IND] = main;
 
-    // Finally, update the listing and save
-    const new_photo: ss_listing_photo = {
-        id: randomUUID(),
-        aws_keys: {
-            main: uploads_succeeded[MAIN_PHOTO_IND]!,
-            card: uploads_succeeded[CARD_PHOTO_IND]!,
-            thumb: uploads_succeeded[THUMB_PHOTO_IND]!
-        },
-        sort_order: request.query.order
-    };
-    
-    const result = await listings.updateOne(
-        { _id: listing._id },
-        {
-            $push: {
-                photos: new_photo
+        const card = sanitize_image(file, 400, 400, { fit: "cover", position: "centre", withoutEnlargement: true });
+        proms[CARD_PHOTO_IND] = card;
+
+        const thumb = sanitize_image(file, 96, 96, { fit: "cover", position: "centre", withoutEnlargement: true });
+        proms[THUMB_PHOTO_IND] = thumb;
+
+        // allSettled only throws for things like syntax errors and such
+        const all_results = await Promise.allSettled(proms);
+
+        type data_key = { data: Buffer; key: string; content_type: string };
+
+        // Basically filter and map in one call to get our results to a list of only things that succeeded
+        const san_results = all_results.reduce<data_key[]>((acc, r) => {
+            if (r.status === "fulfilled") {
+                acc.push({ data: r.value, key: generate_photo_aws_key(listing._id, content_type), content_type });
             }
+            return acc;
+        }, []);
+
+        // If all didn't succeed sanitizing then error
+        if (san_results.length !== all_results.length) {
+            // Return some error fragment
         }
-    );
-    if (result.matchedCount === 0) {
-        // return error fragment
+
+        // Everything worked - lets do the upload
+        const upload_proms = san_results.map(async (r) => {
+            await aws.upload_to_s3(r.key, r.data, r.content_type);
+            return r.key;
+        });
+
+        const all_upload_results = await Promise.allSettled(upload_proms);
+        const uploads_succeeded = all_upload_results.reduce<string[]>((acc, r) => {
+            if (r.status === "fulfilled") {
+                acc.push(r.value);
+            }
+            return acc;
+        }, []);
+
+        // There's nothing more we can really do here other than log the failure
+        const delete_aws_keys = async (keys: string[]) => {
+            // Delete the successful uploads and return
+            const del_proms = keys.map((r) => aws.delete_from_s3(r));
+            const results = await Promise.allSettled(del_proms);
+            const failed = results.reduce<string[]>((arr, r) => {
+                if (r.status === "rejected") arr.push(r.reason);
+                return arr;
+            }, []);
+            if (failed.length > 0) elog(`Failed to delete the following photo keys: ${failed.join(", ")}`);
+        };
+
+        // If not all uploads succeeded, we need to delete the successful ones
+        if (uploads_succeeded.length !== all_upload_results.length) {
+            await delete_aws_keys(uploads_succeeded);
+            // Return some error fragment
+        }
+
+        // Finally, update the listing and save
+        const new_photo: ss_listing_photo = {
+            id: randomUUID(),
+            aws_keys: {
+                main: uploads_succeeded[MAIN_PHOTO_IND]!,
+                card: uploads_succeeded[CARD_PHOTO_IND]!,
+                thumb: uploads_succeeded[THUMB_PHOTO_IND]!,
+            },
+            sort_order: listing.photos.length + i,
+        };
+
+        const result = await listings.updateOne(
+            { _id: listing._id },
+            {
+                $push: {
+                    photos: new_photo,
+                },
+            }
+        );
+        if (result.matchedCount === 0) {
+            // return error fragment
+        }
     }
     // return success fragment
 }
@@ -227,10 +245,15 @@ export function create_listing_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
         await fastify.register(fastifyMultipart, { limits: { fileSize: 4 * 1024 * 1024 } });
         fastify.post("/listings", { preHandler: verify_liuser }, handle_post_listing_draft);
-        fastify.get<route_params>(
+        fastify.get<rts_get_listing>(
             "/listings/:id/edit",
             { preHandler: verify_liuser, schema: GET_DRAFT_SCHEMA },
             handle_get_edit_listing_by_id
+        );
+        fastify.post<rts_post_listing_add_photos>(
+            "/listings/:id/photos",
+            { preHandler: verify_liuser, schema: post_listing_photo_body_schema },
+            handle_push_listing_photo
         );
     };
 }
