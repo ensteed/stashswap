@@ -29,7 +29,7 @@ async function download_from_s3(key: string): Promise<{file: Buffer, content_typ
         const data = await result.Body.transformToByteArray();
         const sz_info = get_length_info(data);
         ilog(`Downloaded ${sz_info.sz}${sz_info.lbl} file from ${key}`);
-        return {file: Buffer.from(data.buffer, data.byteOffset, data.byteLength), content_type: result.ContentType};
+        return {file: Buffer.from(data.buffer, data.byteOffset, data.byteLength), content_type: result.ContentType ?? ""};
     } catch (err: any) {
         if (err?.name === "NoSuchKey") {
             throw make_http_error(`No such aws key ${key} found`, 404);

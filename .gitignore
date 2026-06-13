@@ -2,5 +2,6 @@ node_modules
 public
 dist
 .env
+.dir-locals.el
 .emacs
 .aider*

@@ -72,9 +72,33 @@ async function get_listing(id: string, listings: Collection<ss_listing>): Promis
     }
 }
 
-type route_params = { Params: { id: string } };
+type post_listing_add_photos_item = {
+    tmp_key: string;
+    orig_fname: string;
+};
 
-async function handle_get_edit_listing_by_id(request: FastifyRequest<route_params>, reply: FastifyReply) {
+type rts_get_listing = { Params: { id: string } };
+
+type rts_post_listing_add_photos = {
+    Params: { id: string };
+    Body: post_listing_add_photos_item[];
+};
+
+const post_listing_photo_body_schema = {
+    body: {
+        type: "array",
+        items: {
+            required: ["tmp_key", "orig_fname"],
+            additionalProperties: false,
+            properties: {
+                tmp_key: { type: "string", minLength: 1 },
+                orig_fname: { type: "string", minLength: 1 },
+            },
+        },
+    },
+} as const;
+
+async function handle_get_edit_listing_by_id(request: FastifyRequest<rts_get_listing>, reply: FastifyReply) {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
@@ -97,28 +121,8 @@ function generate_photo_aws_key(listing_id: string, content_type: string): strin
     return config.aws.s3_listing_pics_pf + "/" + listing_id + "." + ext_from_content_type(content_type);
 }
 
-type uploaded_photo_info = {
-    tmp_key: string;
-    orig_fname: string;
-};
-
-type push_listing_body = {
-    photos_json: string;
-};
-
-function is_uploaded_photo_info(val: unknown): val is uploaded_photo_info {
-    return (
-        !!val &&
-        typeof val === "object" &&
-        "tmp_key" in val &&
-        typeof val.tmp_key === "string" &&
-        "orig_fname" in val &&
-        typeof val.orig_fname === "string"
-    );
-}
-
 async function finalize_photo(
-    pinfo: uploaded_photo_info,
+    pinfo: post_listing_add_photos_item,
     order: number,
     listing_id: string
 ): Promise<ss_listing_photo> {
@@ -180,7 +184,6 @@ async function finalize_photo(
         const failed = results.filter((r) => r.status === "rejected").map((r) => r.reason);
         if (failed.length > 0) elog(`Failed to delete the following photo keys: ${failed.join(", ")}`);
     };
-
     // If not all uploads succeeded, we need to delete the successful ones
     if (uploads_succeeded.length !== all_upload_results.length) {
         await delete_aws_keys(uploads_succeeded);
@@ -199,16 +202,13 @@ async function finalize_photo(
     };
 }
 
-async function handle_push_listing_photo(request: FastifyRequest<route_params>, reply: FastifyReply) {
+async function handle_push_listing_photo(request: FastifyRequest<rts_post_listing_add_photos>, reply: FastifyReply) {
     const listings = mongo.get_listings();
     const { id } = request.params;
     const listing = await get_listing(id, listings);
-    const parsed: unknown = request.body;
-    if (!Array.isArray(parsed) || !parsed.every((val) => is_uploaded_photo_info(val))) {
-        // Invalid input format
-    }
+    const photos: post_listing_add_photos_item[] = request.body;
 
-    const photo_proms = (parsed as uploaded_photo_info[]).map((upload_item, ind) => {
+    const photo_proms = photos.map((upload_item, ind) => {
         return finalize_photo(upload_item, listing.photos.length + ind, listing._id);
     });
     const photo_results = await Promise.allSettled(photo_proms);
@@ -254,17 +254,21 @@ async function handle_push_listing_photo(request: FastifyRequest<route_params>, 
             // return error fragment and remove uploaded photos
         }
     }
-    // return success fragment
 }
 
 export function create_listing_routes(): FastifyPluginAsync {
     return async (fastify: FastifyInstance) => {
         await fastify.register(fastifyMultipart, { limits: { fileSize: 4 * 1024 * 1024 } });
         fastify.post("/listings", { preHandler: verify_liuser }, handle_post_listing_draft);
-        fastify.get<route_params>(
+        fastify.get<rts_get_listing>(
             "/listings/:id/edit",
             { preHandler: verify_liuser, schema: GET_DRAFT_SCHEMA },
             handle_get_edit_listing_by_id
+        );
+        fastify.post<rts_post_listing_add_photos>(
+            "/listings/:id/photos",
+            { preHandler: verify_liuser, schema: post_listing_photo_body_schema },
+            handle_push_listing_photo
         );
     };
 }
